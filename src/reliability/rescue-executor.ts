@@ -320,7 +320,8 @@ async function writeAudit(
         ...(metadata ?? {}),
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('[rescue-executor] writeAudit failed:', error instanceof Error ? error.message : String(error));
     return;
   }
 }

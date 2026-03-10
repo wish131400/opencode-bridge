@@ -219,7 +219,8 @@ async function logAuditSafe(
       timestamp: new Date().toISOString(),
       metadata: input.metadata,
     });
-  } catch {
+  } catch (error) {
+    console.error('[recovery-reporter] audit write failed:', error instanceof Error ? error.message : String(error));
     // 审计日志失败不应影响主流程。
   }
 }

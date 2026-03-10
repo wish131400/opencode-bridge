@@ -217,7 +217,8 @@ async function hasCommandInPath(command: string): Promise<boolean> {
       maxBuffer: 1024 * 1024,
     });
     return (result.stdout || '').trim().length > 0;
-  } catch {
+  } catch (error) {
+    console.error('[environment-doctor] command probe failed:', error instanceof Error ? error.message : String(error));
     return false;
   }
 }

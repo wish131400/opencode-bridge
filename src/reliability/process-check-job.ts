@@ -130,7 +130,8 @@ async function readPidFile(pidFilePath: string): Promise<number | null> {
     const raw = (await fs.readFile(pidFilePath, 'utf-8')).trim();
     const pid = Number.parseInt(raw, 10);
     return Number.isNaN(pid) ? null : pid;
-  } catch {
+  } catch (error) {
+    console.error('[process-check-job] readPidFile failed:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -260,7 +261,8 @@ export function createProcessCheckJobRunner(options: ProcessCheckJobRunnerOption
               staleLockMs,
             },
           });
-        } catch {
+        } catch (error) {
+          console.error('[process-check-job] cleanupStaleLocks failed:', error instanceof Error ? error.message : String(error));
           skippedPaths.push(lockPath);
         }
       }

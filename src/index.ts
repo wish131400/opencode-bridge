@@ -18,6 +18,8 @@ import { rootRouter } from './router/root-router.js';
 import { ConversationHeartbeatEngine } from './reliability/conversation-heartbeat.js';
 import { CronScheduler } from './reliability/scheduler.js';
 import { createInternalJobRegistry } from './reliability/job-registry.js';
+import { createProcessCheckJobRunner, createRepairBudgetState } from './reliability/process-check-job.js';
+import { reliabilityConfig } from './config.js';
 import {
   createPermissionActionCallbacks,
   createQuestionActionCallbacks,
@@ -40,6 +42,7 @@ export interface ReliabilityRescueOrchestrator {
 
 export interface ReliabilityJobHandlers {
   watchdogProbe: () => Promise<void>;
+  processConsistencyCheck: () => Promise<void>;
   staleCleanup: () => Promise<void>;
   budgetReset: () => Promise<void>;
 }
@@ -91,15 +94,29 @@ export const bootstrapReliabilityLifecycle = (
   const scheduler = dependencies.createScheduler?.() ?? new CronScheduler();
   const rescueOrchestrator = dependencies.createRescueOrchestrator?.() ?? createRescueOrchestrator(logger);
 
+  // 初始化 process check job runner
+  const repairBudgetState = createRepairBudgetState(reliabilityConfig.repairBudget);
+  const processCheckRunner = createProcessCheckJobRunner({
+    bridgePidFilePath: './logs/bridge.pid',
+    opencodePidFilePath: './logs/opencode.pid',
+    opencodeHost: 'localhost',
+    opencodePort: 4096,
+    repairBudgetState,
+    staleLockPaths: [],
+  });
+
   const jobHandlers: ReliabilityJobHandlers = {
     watchdogProbe: async () => {
       await rescueOrchestrator.runWatchdogProbe();
+    },
+    processConsistencyCheck: async () => {
+      await processCheckRunner.checkProcessConsistency();
     },
     staleCleanup: async () => {
       await rescueOrchestrator.runStaleCleanup();
     },
     budgetReset: async () => {
-      await rescueOrchestrator.runBudgetReset();
+      await processCheckRunner.resetBudget();
     },
   };
 

@@ -265,4 +265,58 @@ describe('reliability rescue e2e', () => {
       nextState: RescueState.RECOVERED,
     });
   });
+
+  it('remote host should trigger manual_required, not repair', async () => {
+    const openCode = new OpenCodeMock();
+    const reporter = new RecoveryReporter(openCode);
+    const recorder = createAuditRecorder();
+
+    const decision = decideRescuePolicy(createBaseInput({
+      retry: {
+        mode: 'finite',
+        attempt: 3,
+        maxAttempts: 3,
+        failureCount: 3,
+        firstFailureAtMs: 110_000,
+      },
+      rescue: {
+        targetHost: '192.168.1.10',
+        budgetRemaining: 3,
+        lastRepairAtMs: undefined,
+      },
+    }));
+
+    expect(decision.action).toBe('manual');
+    expect(decision.reason).toBe('loopback_only_blocked');
+    expect(decision.nextState).toBe(RescueState.MANUAL_REQUIRED);
+    expect(decision.nextBudgetRemaining).toBe(3);
+
+    await fs.mkdir('.sisyphus/evidence', { recursive: true });
+    await fs.writeFile(
+      '.sisyphus/evidence/task-15-remote-host-guard.txt',
+      [
+        'Task 15: 非 loopback 主机拒绝自动救援',
+        '=====================================',
+        '',
+        '测试场景:',
+        '- 目标主机：192.168.1.10 (非 loopback)',
+        '- 救援策略：loopbackOnly = true',
+        '',
+        '决策结果:',
+        `- action: ${decision.action}`,
+        `- reason: ${decision.reason}`,
+        `- nextState: ${decision.nextState}`,
+        `- nextBudgetRemaining: ${decision.nextBudgetRemaining}`,
+        '',
+        '验证规则:',
+        '根据 src/reliability/rescue-policy.ts:136 loopback 检查',
+        '当 loopbackOnly=true 且 targetHost 非 localhost/127.0.0.1/::1 时',
+        '必须返回 manual_required，禁止自动救援',
+        '',
+        '测试时间:',
+        new Date().toISOString(),
+      ].join('\n'),
+      'utf-8',
+    );
+  });
 });

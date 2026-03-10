@@ -153,7 +153,8 @@ export async function acquireRescueLock(options: RescueLockOptions): Promise<Res
     try {
       const now = new Date(getNow());
       await fs.utimes(lockPath, now, now);
-    } catch {
+    } catch (error) {
+      console.error('[process-guard] lock heartbeat update failed:', error instanceof Error ? error.message : String(error));
       // 锁被外部清理时，心跳更新可安全忽略。
     }
   }, updateMs);
@@ -336,7 +337,8 @@ async function listProcessesByPowerShell(): Promise<OpenCodeProcessInfo[]> {
       processList.push({ pid, command });
     }
     return processList;
-  } catch {
+  } catch (error) {
+    console.error('[process-guard] PowerShell scan failed:', error instanceof Error ? error.message : String(error));
     return [];
   }
 }
