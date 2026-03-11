@@ -49,16 +49,97 @@ export class CronScheduler {
     if (this.jobs.has(definition.id)) {
       throw new Error(`[Scheduler] 重复任务 ID: ${definition.id}`);
     }
+    const normalizedDefinition = this.validateAndNormalizeDefinition(definition);
+    const job: InternalRegisteredJob = {
+      definition: normalizedDefinition,
+      task: null,
+      state: createInitialState(),
+      currentRun: null,
+    };
+
+    this.jobs.set(normalizedDefinition.id, job);
+    if (this.running) {
+      job.task = this.createScheduledTask(normalizedDefinition.id, job);
+    }
+  }
+
+  upsertJob(definition: SchedulerJobDefinition): void {
+    const normalizedDefinition = this.validateAndNormalizeDefinition(definition);
+    const existing = this.jobs.get(normalizedDefinition.id);
+    if (!existing) {
+      this.registerJob(normalizedDefinition);
+      return;
+    }
+
+    existing.task?.stop();
+    existing.task?.destroy();
+    existing.task = null;
+    existing.definition = normalizedDefinition;
+    if (this.running) {
+      existing.task = this.createScheduledTask(normalizedDefinition.id, existing);
+    }
+  }
+
+  removeJob(jobId: string): boolean {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return false;
+    }
+
+    job.task?.stop();
+    job.task?.destroy();
+    job.task = null;
+    this.jobs.delete(jobId);
+    return true;
+  }
+
+  hasJob(jobId: string): boolean {
+    return this.jobs.has(jobId);
+  }
+
+  getJobDefinition(jobId: string): SchedulerJobDefinition | null {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return null;
+    }
+    return { ...job.definition };
+  }
+
+  getAllJobDefinitions(): SchedulerJobDefinition[] {
+    const definitions: SchedulerJobDefinition[] = [];
+    for (const job of this.jobs.values()) {
+      definitions.push({ ...job.definition });
+    }
+    return definitions;
+  }
+
+  private validateAndNormalizeDefinition(definition: SchedulerJobDefinition): SchedulerJobDefinition {
+    if (!definition.id || !definition.id.trim()) {
+      throw new Error('[Scheduler] 任务 ID 不能为空');
+    }
+
     if (!cron.validate(definition.cronExpression)) {
       throw new Error(`[Scheduler] 非法 cron 表达式: ${definition.cronExpression}`);
     }
 
-    this.jobs.set(definition.id, {
-      definition,
-      task: null,
-      state: createInitialState(),
-      currentRun: null,
-    });
+    return {
+      ...definition,
+      id: definition.id.trim(),
+      cronExpression: definition.cronExpression.trim(),
+    };
+  }
+
+  private createScheduledTask(jobId: string, job: InternalRegisteredJob): ScheduledTask {
+    return cron.schedule(
+      job.definition.cronExpression,
+      async () => {
+        await this.executeJob(jobId);
+      },
+      {
+        timezone: job.definition.timezone,
+        noOverlap: true,
+      }
+    );
   }
 
   getRegisteredJobIds(): string[] {
@@ -84,17 +165,7 @@ export class CronScheduler {
 
     this.running = true;
     for (const [jobId, job] of this.jobs.entries()) {
-      const task = cron.schedule(
-        job.definition.cronExpression,
-        async () => {
-          await this.executeJob(jobId);
-        },
-        {
-          timezone: job.definition.timezone,
-          noOverlap: true,
-        }
-      );
-      job.task = task;
+      job.task = this.createScheduledTask(jobId, job);
     }
   }
 

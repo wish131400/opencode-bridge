@@ -20,6 +20,10 @@ import { ConversationHeartbeatEngine } from './reliability/conversation-heartbea
 import { CronScheduler } from './reliability/scheduler.js';
 import { createInternalJobRegistry } from './reliability/job-registry.js';
 import { createProcessCheckJobRunner, createRepairBudgetState } from './reliability/process-check-job.js';
+import { createProactiveHeartbeatRunner } from './reliability/proactive-heartbeat.js';
+import { RuntimeCronManager } from './reliability/runtime-cron.js';
+import { createCronApiServer } from './reliability/cron-api-server.js';
+import { setRuntimeCronManager } from './reliability/runtime-cron-registry.js';
 import { probeOpenCodeHealth } from './reliability/opencode-probe.js';
 import { decideRescuePolicy } from './reliability/rescue-policy.js';
 import { executeRescuePipeline } from './reliability/rescue-executor.js';
@@ -80,6 +84,11 @@ export const createRescueOrchestrator = (
   let firstFailureAtMs = 0;
   let repairBudgetRemaining = reliabilityConfig.repairBudget;
   let lastRepairAtMs: number | undefined;
+  const HEALTHY_LOG_INTERVAL_MS = 10 * 60 * 1000;
+  const WAIT_LOG_INTERVAL_MS = 5 * 60 * 1000;
+  let lastHealthyLogAtMs = 0;
+  let lastPolicyLogAtMs = 0;
+  let lastPolicySignature = '';
 
   return {
     runWatchdogProbe: async () => {
@@ -94,7 +103,12 @@ export const createRescueOrchestrator = (
           failureCount = 0;
           firstFailureAtMs = 0;
           rescueState = RescueState.HEALTHY;
-          logger.info('[Reliability] watchdog probe healthy');
+          const shouldLogHealthy =
+            lastHealthyLogAtMs === 0 || nowMs - lastHealthyLogAtMs >= HEALTHY_LOG_INTERVAL_MS;
+          if (shouldLogHealthy) {
+            logger.info('[Reliability] watchdog probe healthy');
+            lastHealthyLogAtMs = nowMs;
+          }
           return;
         }
 
@@ -126,7 +140,16 @@ export const createRescueOrchestrator = (
         repairBudgetRemaining = policyDecision.nextBudgetRemaining;
 
         if (policyDecision.action !== 'repair') {
-          logger.info(`[Reliability] watchdog policy=${policyDecision.action} reason=${policyDecision.reason}`);
+          const signature = `${policyDecision.action}:${policyDecision.reason}`;
+          const shouldLogPolicy =
+            signature !== lastPolicySignature
+            || lastPolicyLogAtMs === 0
+            || nowMs - lastPolicyLogAtMs >= WAIT_LOG_INTERVAL_MS;
+          if (shouldLogPolicy) {
+            logger.info(`[Reliability] watchdog policy=${policyDecision.action} reason=${policyDecision.reason}`);
+            lastPolicyLogAtMs = nowMs;
+            lastPolicySignature = signature;
+          }
           return;
         }
 
@@ -212,9 +235,14 @@ export const bootstrapReliabilityLifecycle = (
   dependencies: ReliabilityLifecycleDependencies = {}
 ): ReliabilityLifecycle => {
   const logger = dependencies.logger ?? console;
-  const heartbeatEngine = dependencies.createHeartbeatEngine?.() ?? new ConversationHeartbeatEngine();
+  const shouldUseInboundHeartbeat = reliabilityConfig.inboundHeartbeatEnabled || Boolean(dependencies.createHeartbeatEngine);
+  const heartbeatEngine = dependencies.createHeartbeatEngine?.()
+    ?? new ConversationHeartbeatEngine({
+      windowMs: reliabilityConfig.heartbeatIntervalMs,
+    });
   const scheduler = dependencies.createScheduler?.() ?? new CronScheduler();
   const rescueOrchestrator = dependencies.createRescueOrchestrator?.() ?? createRescueOrchestrator(logger);
+  let runtimeCronSessionId: string | null = null;
 
   // 初始化 process check job runner
   const repairBudgetState = createRepairBudgetState(reliabilityConfig.repairBudget);
@@ -255,13 +283,140 @@ export const bootstrapReliabilityLifecycle = (
     };
 
   registry.registerAll(scheduler);
-  scheduler.start();
+
+  let runtimeCronManager: RuntimeCronManager | null = null;
+  if (scheduler instanceof CronScheduler) {
+    runtimeCronManager = new RuntimeCronManager({
+      scheduler,
+      filePath: reliabilityConfig.cronJobsFile,
+      dispatchPayload: async (job) => {
+        if (job.payload.kind !== 'systemEvent') {
+          return;
+        }
+
+        const sessionId = job.payload.sessionId || runtimeCronSessionId || (() => {
+          return '';
+        })();
+
+        const targetSessionId = sessionId || (await opencodeClient.createSession('Runtime Cron Jobs')).id;
+        if (!runtimeCronSessionId) {
+          runtimeCronSessionId = targetSessionId;
+        }
+
+        await opencodeClient.sendMessageAsync(targetSessionId, job.payload.text, {
+          ...(job.payload.agent ? { agent: job.payload.agent } : {}),
+          ...(job.payload.directory ? { directory: job.payload.directory } : {}),
+        });
+      },
+      logger: {
+        info: message => {
+          logger.info(message);
+        },
+        warn: message => {
+          logger.info(message);
+        },
+        error: (...args: unknown[]) => {
+          logger.error('[RuntimeCron]', ...args);
+        },
+      },
+    });
+    setRuntimeCronManager(runtimeCronManager);
+  } else {
+    logger.info('[Reliability] 当前 scheduler 非 CronScheduler，跳过 runtime cron manager 注入');
+    setRuntimeCronManager(null);
+  }
+
+  const proactiveHeartbeatRunner = createProactiveHeartbeatRunner({
+    enabled: reliabilityConfig.proactiveHeartbeatEnabled,
+    intervalMs: reliabilityConfig.heartbeatIntervalMs,
+    prompt: reliabilityConfig.heartbeatPrompt || '',
+    agent: reliabilityConfig.heartbeatAgent,
+    client: {
+      createSession: async (title?: string, directory?: string) => {
+        const created = await opencodeClient.createSession(title, directory);
+        return { id: created.id };
+      },
+      getSessionById: async (sessionId: string, options?: { directory?: string }) => {
+        return await opencodeClient.getSessionById(sessionId, options);
+      },
+      sendMessage: async (
+        sessionId: string,
+        text: string,
+        options?: {
+          agent?: string;
+          directory?: string;
+          providerId?: string;
+          modelId?: string;
+          variant?: string;
+        }
+      ) => {
+        const response = await opencodeClient.sendMessage(sessionId, text, options);
+        return { parts: response.parts as unknown[] };
+      },
+    },
+    notifyAlert: async (alertText: string) => {
+      if (reliabilityConfig.heartbeatAlertChats.length === 0) {
+        return;
+      }
+
+      const sender = feishuAdapter.getSender();
+      for (const chatId of reliabilityConfig.heartbeatAlertChats) {
+        try {
+          await sender.sendText(chatId, `⚠️ [Heartbeat Alert]\n${alertText}`);
+        } catch (error) {
+          logger.error(`[Heartbeat] 发送告警失败 chat=${chatId}:`, error);
+        }
+      }
+    },
+    logger: {
+      info: message => {
+        logger.info(message);
+      },
+      warn: message => {
+        logger.info(message);
+      },
+      error: (...args: unknown[]) => {
+        logger.error(...args);
+      },
+    },
+  });
+
+  let cronApiServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
+  if (reliabilityConfig.cronApiEnabled && runtimeCronManager) {
+    cronApiServer = createCronApiServer(runtimeCronManager, {
+      host: reliabilityConfig.cronApiHost,
+      port: reliabilityConfig.cronApiPort,
+      token: reliabilityConfig.cronApiToken,
+      logger: {
+        info: message => {
+          logger.info(message);
+        },
+        warn: message => {
+          logger.info(message);
+        },
+        error: (...args: unknown[]) => {
+          logger.error(...args);
+        },
+      },
+    });
+    void cronApiServer.start().catch(error => {
+      logger.error('[RuntimeCronAPI] 启动失败:', error);
+    });
+  }
+
+  if (reliabilityConfig.cronEnabled) {
+    scheduler.start();
+  }
+  proactiveHeartbeatRunner.start();
   logger.info('[Reliability] bootstrap 完成（heartbeat + scheduler + rescue orchestrator）');
 
   let cleaned = false;
 
   return {
     onInboundMessage: async () => {
+      if (!shouldUseInboundHeartbeat) {
+        return;
+      }
       try {
         await heartbeatEngine.onInboundMessage();
       } catch (error) {
@@ -276,7 +431,10 @@ export const bootstrapReliabilityLifecycle = (
       await Promise.all([
         scheduler.stop(),
         Promise.resolve(rescueOrchestrator.cleanup()),
+        Promise.resolve(proactiveHeartbeatRunner.stop()),
+        cronApiServer ? cronApiServer.stop() : Promise.resolve(),
       ]);
+      setRuntimeCronManager(null);
       logger.info('[Reliability] cleanup 完成');
     },
   };
@@ -285,7 +443,7 @@ export const bootstrapReliabilityLifecycle = (
 async function main() {
 
   console.log('╔════════════════════════════════════════════════╗');
-  console.log('║   飞书 × OpenCode 桥接服务 v2.8.3 (Group)  ║');
+console.log('║   飞书 × OpenCode 桥接服务 v2.9.0-beta (Group)  ║');
   console.log('╚════════════════════════════════════════════════╝');
 
   // 1. 验证配置

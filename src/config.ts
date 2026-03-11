@@ -256,11 +256,50 @@ export const directoryConfig = {
 
 // 可靠性配置
 export const reliabilityConfig = {
+  // 是否启用可靠性 Cron 调度
+  cronEnabled: parseBooleanEnv(process.env.RELIABILITY_CRON_ENABLED, true),
+
+  // 是否启用运行时 Cron API
+  cronApiEnabled: parseBooleanEnv(process.env.RELIABILITY_CRON_API_ENABLED, false),
+
+  // Cron API 监听地址
+  cronApiHost: process.env.RELIABILITY_CRON_API_HOST?.trim() || '127.0.0.1',
+
+  // Cron API 监听端口
+  cronApiPort: (() => {
+    const parsed = parseNonNegativeIntEnv(process.env.RELIABILITY_CRON_API_PORT, -1);
+    return parsed > 0 ? parsed : 4097;
+  })(),
+
+  // Cron API Bearer Token（可选）
+  cronApiToken: process.env.RELIABILITY_CRON_API_TOKEN?.trim() || undefined,
+
+  // 运行时 Cron 任务持久化文件（可选，默认 ~/cron/jobs.json）
+  cronJobsFile: process.env.RELIABILITY_CRON_JOBS_FILE?.trim() || undefined,
+
+  // 是否启用主动心跳（Bridge 定时器触发）
+  proactiveHeartbeatEnabled: parseBooleanEnv(process.env.RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED, false),
+
+  // 是否启用入站消息触发心跳（兼容模式）
+  inboundHeartbeatEnabled: parseBooleanEnv(process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED, false),
+
   // 心跳间隔 (毫秒)，默认 30 分钟
   heartbeatIntervalMs: (() => {
     const parsed = parseNonNegativeIntEnv(process.env.RELIABILITY_HEARTBEAT_INTERVAL_MS, -1);
     return parsed > 0 ? parsed : 1800000;
   })(),
+
+  // 主动心跳使用的 agent（可选）
+  heartbeatAgent: process.env.RELIABILITY_HEARTBEAT_AGENT?.trim() || undefined,
+
+  // 主动心跳提示词（可选）
+  heartbeatPrompt: process.env.RELIABILITY_HEARTBEAT_PROMPT?.trim() || undefined,
+
+  // 主动心跳告警推送目标（飞书 chat_id，逗号分隔）
+  heartbeatAlertChats: (process.env.RELIABILITY_HEARTBEAT_ALERT_CHATS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(item => item.length > 0),
 
   // 失败阈值，默认 3
   failureThreshold: (() => {

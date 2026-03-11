@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const envKeys = [
+  'RELIABILITY_CRON_ENABLED',
+  'RELIABILITY_CRON_API_ENABLED',
+  'RELIABILITY_CRON_API_HOST',
+  'RELIABILITY_CRON_API_PORT',
+  'RELIABILITY_CRON_API_TOKEN',
+  'RELIABILITY_CRON_JOBS_FILE',
+  'RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED',
+  'RELIABILITY_INBOUND_HEARTBEAT_ENABLED',
+  'RELIABILITY_HEARTBEAT_AGENT',
+  'RELIABILITY_HEARTBEAT_PROMPT',
+  'RELIABILITY_HEARTBEAT_ALERT_CHATS',
   'RELIABILITY_HEARTBEAT_INTERVAL_MS',
   'RELIABILITY_FAILURE_THRESHOLD',
   'RELIABILITY_WINDOW_MS',
@@ -48,6 +59,14 @@ describe('ReliabilityConfig - default values', () => {
 
     const { reliabilityConfig } = await loadConfigModule();
 
+    expect(reliabilityConfig.cronEnabled).toBe(true);
+    expect(reliabilityConfig.cronApiEnabled).toBe(false);
+    expect(reliabilityConfig.cronApiHost).toBe('127.0.0.1');
+    expect(reliabilityConfig.cronApiPort).toBe(4097);
+    expect(reliabilityConfig.proactiveHeartbeatEnabled).toBe(false);
+    expect(reliabilityConfig.inboundHeartbeatEnabled).toBe(false);
+    expect(reliabilityConfig.heartbeatAlertChats).toEqual([]);
+
     // 心跳间隔默认 30 分钟
     expect(reliabilityConfig.heartbeatIntervalMs).toBe(1800000);
     // 失败阈值默认 3
@@ -77,6 +96,28 @@ describe('ReliabilityConfig - custom values', () => {
 
     const { reliabilityConfig } = await loadConfigModule();
     expect(reliabilityConfig.heartbeatIntervalMs).toBe(60000);
+  });
+
+  it('应支持 cron 与主动心跳开关', async () => {
+    snapshotEnv();
+    process.env.RELIABILITY_CRON_ENABLED = 'false';
+    process.env.RELIABILITY_CRON_API_ENABLED = 'true';
+    process.env.RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED = 'false';
+    process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED = 'true';
+
+    const { reliabilityConfig } = await loadConfigModule();
+    expect(reliabilityConfig.cronEnabled).toBe(false);
+    expect(reliabilityConfig.cronApiEnabled).toBe(true);
+    expect(reliabilityConfig.proactiveHeartbeatEnabled).toBe(false);
+    expect(reliabilityConfig.inboundHeartbeatEnabled).toBe(true);
+  });
+
+  it('应支持主动心跳告警会话列表', async () => {
+    snapshotEnv();
+    process.env.RELIABILITY_HEARTBEAT_ALERT_CHATS = 'oc_1, oc_2 ,';
+
+    const { reliabilityConfig } = await loadConfigModule();
+    expect(reliabilityConfig.heartbeatAlertChats).toEqual(['oc_1', 'oc_2']);
   });
 
   it('应支持自定义失败阈值', async () => {
@@ -265,6 +306,10 @@ describe('ReliabilityConfig - mode validation', () => {
     const keys = Object.keys(reliabilityConfig);
     
     expect(keys).toContain('heartbeatIntervalMs');
+    expect(keys).toContain('cronEnabled');
+    expect(keys).toContain('cronApiEnabled');
+    expect(keys).toContain('proactiveHeartbeatEnabled');
+    expect(keys).toContain('inboundHeartbeatEnabled');
     expect(keys).toContain('failureThreshold');
     expect(keys).toContain('windowMs');
     expect(keys).toContain('cooldownMs');

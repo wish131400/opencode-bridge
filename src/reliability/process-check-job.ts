@@ -95,6 +95,11 @@ const DEFAULT_CRON_EXPRESSIONS: ProcessCheckJobCronExpressions = {
 
 const DEFAULT_STALE_LOCK_MS = 10 * 60 * 1000;
 const DEFAULT_AUDIT_PATH = path.resolve(process.cwd(), 'logs', 'reliability-audit.jsonl');
+const missingPidNoticePaths = new Set<string>();
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
 
 export function createRepairBudgetState(maxBudget: number, now: () => number = Date.now): RepairBudgetState {
   const safeMaxBudget = Number.isFinite(maxBudget) && maxBudget > 0
@@ -131,6 +136,14 @@ async function readPidFile(pidFilePath: string): Promise<number | null> {
     const pid = Number.parseInt(raw, 10);
     return Number.isNaN(pid) ? null : pid;
   } catch (error) {
+    if (isErrnoException(error) && error.code === 'ENOENT') {
+      if (!missingPidNoticePaths.has(pidFilePath)) {
+        missingPidNoticePaths.add(pidFilePath);
+        console.info(`[process-check-job] bridge pid file not found, fallback to foreground mode detection: ${pidFilePath}`);
+      }
+      return null;
+    }
+
     console.error('[process-check-job] readPidFile failed:', error instanceof Error ? error.message : String(error));
     return null;
   }
@@ -178,7 +191,8 @@ export function createProcessCheckJobRunner(options: ProcessCheckJobRunnerOption
       const bridgePid = await readPidFile(options.bridgePidFilePath);
 
       if (bridgePid === null) {
-        bridgeStatus = 'not-running';
+        // 前台运行模式通常不会写 bridge.pid，此时当前进程即为 bridge 本体。
+        bridgeStatus = 'ok';
       } else {
         const alive = await isProcessAlive(bridgePid);
         if (alive) {

@@ -8,6 +8,9 @@ import type { ConversationHeartbeatResult } from '../src/reliability/conversatio
 
 describe('reliability bootstrap lifecycle', () => {
   it('启动时应初始化 heartbeat、scheduler 与 rescue orchestrator', async () => {
+    const previousInboundHeartbeatEnabled = process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED;
+    process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED = 'true';
+
     const callTrace: string[] = [];
 
     const heartbeat = {
@@ -80,6 +83,12 @@ describe('reliability bootstrap lifecycle', () => {
     expect(rescueOrchestrator.runWatchdogProbe).toHaveBeenCalledTimes(1);
     expect(rescueOrchestrator.runStaleCleanup).toHaveBeenCalledTimes(1);
     expect(rescueOrchestrator.runBudgetReset).toHaveBeenCalledTimes(0);
+
+    if (previousInboundHeartbeatEnabled === undefined) {
+      delete process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED;
+    } else {
+      process.env.RELIABILITY_INBOUND_HEARTBEAT_ENABLED = previousInboundHeartbeatEnabled;
+    }
   });
 
   it('退出时应清理 scheduler 与 rescue 资源且幂等', async () => {
