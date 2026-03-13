@@ -23,7 +23,9 @@ import { createProcessCheckJobRunner, createRepairBudgetState } from './reliabil
 import { createProactiveHeartbeatRunner } from './reliability/proactive-heartbeat.js';
 import { RuntimeCronManager } from './reliability/runtime-cron.js';
 import { createCronApiServer } from './reliability/cron-api-server.js';
-import { setRuntimeCronManager } from './reliability/runtime-cron-registry.js';
+import { getRuntimeCronManager, setRuntimeCronManager } from './reliability/runtime-cron-registry.js';
+import { createRuntimeCronDispatcher } from './reliability/runtime-cron-dispatcher.js';
+import { cleanupRuntimeCronJobsByConversation, scanAndCleanupOrphanRuntimeCronJobs } from './reliability/runtime-cron-orphan.js';
 import { probeOpenCodeHealth } from './reliability/opencode-probe.js';
 import { decideRescuePolicy } from './reliability/rescue-policy.js';
 import { executeRescuePipeline } from './reliability/rescue-executor.js';
@@ -242,7 +244,6 @@ export const bootstrapReliabilityLifecycle = (
     });
   const scheduler = dependencies.createScheduler?.() ?? new CronScheduler();
   const rescueOrchestrator = dependencies.createRescueOrchestrator?.() ?? createRescueOrchestrator(logger);
-  let runtimeCronSessionId: string | null = null;
 
   // 初始化 process check job runner
   const repairBudgetState = createRepairBudgetState(reliabilityConfig.repairBudget);
@@ -264,6 +265,7 @@ export const bootstrapReliabilityLifecycle = (
     },
     staleCleanup: async () => {
       await rescueOrchestrator.runStaleCleanup();
+      await cleanupOrphanCronJobs();
     },
     budgetReset: async () => {
       await processCheckRunner.resetBudget();
@@ -285,28 +287,44 @@ export const bootstrapReliabilityLifecycle = (
   registry.registerAll(scheduler);
 
   let runtimeCronManager: RuntimeCronManager | null = null;
+  const runtimeCronDispatcher = createRuntimeCronDispatcher({
+    getSessionById: async (sessionId, options) => {
+      return await opencodeClient.getSessionById(sessionId, options);
+    },
+    sendMessage: async (sessionId, text, options) => {
+      return await opencodeClient.sendMessage(sessionId, text, options);
+    },
+    sendMessageAsync: async (sessionId, text, options) => {
+      await opencodeClient.sendMessageAsync(sessionId, text, options);
+      return true;
+    },
+    getSender: platform => {
+      if (platform === 'feishu') {
+        return feishuAdapter.getSender();
+      }
+      if (platform === 'discord') {
+        return discordAdapter.getSender();
+      }
+      return null;
+    },
+    logger: {
+      info: message => {
+        logger.info(message);
+      },
+      warn: message => {
+        logger.info(message);
+      },
+      error: (...args: unknown[]) => {
+        logger.error('[RuntimeCronDispatch]', ...args);
+      },
+    },
+  });
   if (scheduler instanceof CronScheduler) {
     runtimeCronManager = new RuntimeCronManager({
       scheduler,
       filePath: reliabilityConfig.cronJobsFile,
       dispatchPayload: async (job) => {
-        if (job.payload.kind !== 'systemEvent') {
-          return;
-        }
-
-        const sessionId = job.payload.sessionId || runtimeCronSessionId || (() => {
-          return '';
-        })();
-
-        const targetSessionId = sessionId || (await opencodeClient.createSession('Runtime Cron Jobs')).id;
-        if (!runtimeCronSessionId) {
-          runtimeCronSessionId = targetSessionId;
-        }
-
-        await opencodeClient.sendMessageAsync(targetSessionId, job.payload.text, {
-          ...(job.payload.agent ? { agent: job.payload.agent } : {}),
-          ...(job.payload.directory ? { directory: job.payload.directory } : {}),
-        });
+        await runtimeCronDispatcher.dispatch(job);
       },
       logger: {
         info: message => {
@@ -325,6 +343,37 @@ export const bootstrapReliabilityLifecycle = (
     logger.info('[Reliability] 当前 scheduler 非 CronScheduler，跳过 runtime cron manager 注入');
     setRuntimeCronManager(null);
   }
+
+  const cleanupOrphanCronJobs = async (): Promise<void> => {
+    if (!runtimeCronManager || !reliabilityConfig.cronOrphanAutoCleanup) {
+      return;
+    }
+
+    const cleanup = await scanAndCleanupOrphanRuntimeCronJobs(runtimeCronManager, {
+      hasConversationBinding: (platform, conversationId, sessionId) => {
+        const binding = chatSessionStore.getSessionByConversation(platform, conversationId);
+        if (!binding) {
+          return false;
+        }
+        return !sessionId || binding.sessionId === sessionId;
+      },
+      getSessionStatus: async (sessionId, directory) => {
+        try {
+          const session = await opencodeClient.getSessionById(
+            sessionId,
+            directory ? { directory } : undefined
+          );
+          return session ? 'exists' : 'missing';
+        } catch {
+          return 'unknown';
+        }
+      },
+    });
+
+    if (cleanup.removedJobIds.length > 0) {
+      logger.info(`[RuntimeCron] orphan cleanup removed ${cleanup.removedJobIds.length} job(s)`);
+    }
+  };
 
   const proactiveHeartbeatRunner = createProactiveHeartbeatRunner({
     enabled: reliabilityConfig.proactiveHeartbeatEnabled,
@@ -405,6 +454,9 @@ export const bootstrapReliabilityLifecycle = (
   }
 
   if (reliabilityConfig.cronEnabled) {
+    void cleanupOrphanCronJobs().catch(error => {
+      logger.error('[RuntimeCron] startup orphan cleanup failed:', error);
+    });
     scheduler.start();
   }
   proactiveHeartbeatRunner.start();
@@ -1778,6 +1830,9 @@ console.log('║   飞书 × OpenCode 桥接服务 v2.9.0-beta (Group)  ║');
 
   feishuClient.onChatDisbanded(async (chatId) => {
     console.log(`[Index] 群 ${chatId} 已解散`);
+    if (reliabilityConfig.cronOrphanAutoCleanup) {
+      cleanupRuntimeCronJobsByConversation(getRuntimeCronManager(), 'feishu', chatId);
+    }
     chatSessionStore.removeSession(chatId);
   });
   
