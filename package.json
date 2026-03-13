@@ -2,7 +2,7 @@
   "name": "opencode-bridge",
   "version": "2.9.0-beta",
   "type": "module",
-  "description": "飞书机器人 × OpenCode 桥接服务，通过飞书聊天控制OpenCode",
+  "description": "Feishu / Discord × OpenCode bridge service with runtime cron and reliability tooling",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -37,12 +37,15 @@
   },
   "keywords": [
     "feishu",
+    "discord",
     "opencode",
+    "bridge",
+    "cli",
     "chatbot",
     "ai"
   ],
   "author": "HNGM-HP",
-  "license": "GPLv3",
+  "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/HNGM-HP/opencode-bridge.git"
