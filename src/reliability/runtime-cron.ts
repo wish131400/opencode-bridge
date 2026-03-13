@@ -15,6 +15,14 @@ export interface RuntimeCronPayloadSystemEvent {
   sessionId?: string;
   directory?: string;
   agent?: string;
+  delivery?: RuntimeCronDelivery;
+}
+
+export interface RuntimeCronDelivery {
+  platform: 'feishu' | 'discord';
+  conversationId: string;
+  creatorId?: string;
+  fallbackConversationId?: string;
 }
 
 export type RuntimeCronPayload = RuntimeCronPayloadSystemEvent;
@@ -185,6 +193,10 @@ export class RuntimeCronManager {
       throw error;
     }
     return true;
+  }
+
+  getJob(jobId: string): RuntimeCronJob | null {
+    return this.jobs.get(jobId) ?? null;
   }
 
   private syncToScheduler(): void {
@@ -374,12 +386,36 @@ function normalizePayload(payload: RuntimeCronPayload): RuntimeCronPayload {
   const sessionId = payload.sessionId?.trim();
   const directory = payload.directory?.trim();
   const agent = payload.agent?.trim();
+  const delivery = normalizeDelivery(payload.delivery);
   return {
     kind: 'systemEvent',
     text,
     ...(sessionId ? { sessionId } : {}),
     ...(directory ? { directory } : {}),
     ...(agent ? { agent } : {}),
+    ...(delivery ? { delivery } : {}),
+  };
+}
+
+function normalizeDelivery(delivery: RuntimeCronDelivery | undefined): RuntimeCronDelivery | undefined {
+  if (!delivery) {
+    return undefined;
+  }
+
+  const platform = delivery.platform === 'discord' ? 'discord' : delivery.platform === 'feishu' ? 'feishu' : '';
+  const conversationId = delivery.conversationId?.trim();
+  const creatorId = delivery.creatorId?.trim();
+  const fallbackConversationId = delivery.fallbackConversationId?.trim();
+
+  if (!platform || !conversationId) {
+    throw new Error('delivery must include platform and conversationId');
+  }
+
+  return {
+    platform,
+    conversationId,
+    ...(creatorId ? { creatorId } : {}),
+    ...(fallbackConversationId ? { fallbackConversationId } : {}),
   };
 }
 

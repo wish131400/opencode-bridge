@@ -27,6 +27,12 @@ describe('RuntimeCronManager', () => {
       payload: {
         kind: 'systemEvent',
         text: 'hello',
+        sessionId: 'session-1',
+        delivery: {
+          platform: 'feishu',
+          conversationId: 'chat-1',
+          creatorId: 'user-1',
+        },
       },
       enabled: true,
     });
@@ -37,6 +43,7 @@ describe('RuntimeCronManager', () => {
     const listed = manager.listJobs();
     expect(listed.length).toBe(1);
     expect(listed[0].name).toBe('demo-job');
+    expect(listed[0].payload.delivery?.conversationId).toBe('chat-1');
 
     const updated = manager.updateJob({
       id: created.id,
@@ -74,6 +81,11 @@ describe('RuntimeCronManager', () => {
       payload: {
         kind: 'systemEvent',
         text: 'tick',
+        sessionId: 'session-1',
+        delivery: {
+          platform: 'feishu',
+          conversationId: 'chat-1',
+        },
       },
       enabled: true,
     });
