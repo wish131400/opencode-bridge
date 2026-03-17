@@ -1,4 +1,4 @@
-# Feishu × OpenCode Bridge Architecture (v2.9.1-beta)
+# Feishu × OpenCode Bridge Architecture (v2.9.1)
 
 This document describes the current running architecture, focusing on platform integration, routing scheduling, event closure, directory consistency, and maintainability strategies.
 

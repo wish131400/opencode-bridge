@@ -1,6 +1,6 @@
-# Feishu / Discord × OpenCode Bridge Service v2.9.1-beta
+# Feishu / Discord × OpenCode Bridge Service v2.9.1
 
-[![v2.9.1-beta](https://img.shields.io/badge/v2.9.1--beta-3178C6)]()
+[![v2.9.1](https://img.shields.io/badge/v2.9.1-3178C6)]()
 [![Node.js >= 18](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -9,7 +9,7 @@
 
 ---
 
-A cross-platform bridge layer that serves both Feishu and Discord. `v2.9.1-beta` refactors the core from "single-file logic stack" to "platform adapter layer + root router + OpenCode event hub + domain processors", focusing on cross-platform scalability, permission loop stability, directory instance consistency, and production maintainability.
+A cross-platform bridge layer that serves both Feishu and Discord. `v2.9.1` refactors the core from "single-file logic stack" to "platform adapter layer + root router + OpenCode event hub + domain processors", focusing on cross-platform scalability, permission loop stability, directory instance consistency, and production maintainability.
 
 With runtime Cron (API + `/cron` + `///cron` + natural language parsing) and local reliability governance, this project further closes the capability gap with OpenClaw in "automated scheduling + ops availability", while maintaining advantages in multi-platform routing and permission loop engineering.
 
@@ -397,25 +397,6 @@ See [Troubleshooting Document](assets/docs/troubleshooting-en.md).
 
 <a id="detailed-documentation"></a>
 ## 📚 Detailed Documentation
-
-### Chinese Documentation
-
-| Document | Description |
-|---|---|
-| [架构文档](assets/docs/architecture.md) | Project layering and platform capabilities |
-| [环境变量](assets/docs/environment.md) | Complete environment configuration |
-| [可靠性指南](assets/docs/reliability.md) | Heartbeat, Cron, and crash rescue |
-| [飞书后台配置](assets/docs/feishu-config.md) | Event subscriptions and permissions |
-| [命令速查](assets/docs/commands.md) | Complete command reference |
-| [实现细节](assets/docs/implementation.md) | Key implementation details |
-| [故障排查](assets/docs/troubleshooting.md) | Common issues and solutions |
-| [部署运维](assets/docs/deployment.md) | Deployment and systemd setup |
-| [Agent 使用](assets/docs/agent.md) | Role configuration and custom agents |
-| [灰度部署](assets/docs/rollout.md) | Gray deployment and rollback SOP |
-| [SDK API](assets/docs/sdk-api.md) | OpenCode SDK integration guide |
-| [工作目录指南](assets/docs/workspace-guide.md) | Working directory strategy and project configuration |
-
-### English Documentation
 
 | Document | Description |
 |---|---|

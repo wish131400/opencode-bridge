@@ -1,6 +1,6 @@
 # Gray Deployment and Rollback SOP
 
-> **Note**: This section applies to v2.9.1-beta, involving router mode gray upgrade flow.
+> **Note**: This section applies to v2.9.1, involving router mode gray upgrade flow.
 
 ## 1. Router Mode Configuration
 
