@@ -1,4 +1,4 @@
-# Feishu / Discord × OpenCode 桥接服务 v2.9.1
+# Feishu / Discord × OpenCode 桥接服务 v2.9.2-beta-pr1
 
 [![v2.9.1](https://img.shields.io/badge/v2.9.1-3178C6)]()
 [![Node.js >= 18](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
