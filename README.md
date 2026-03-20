@@ -48,7 +48,7 @@
 |---|---|---|
 | 群聊/私聊统一路由 | 同一套入口支持私聊和群聊，按映射路由到正确会话 | 群聊 @ 机器人；私聊直接发消息 |
 | 私聊建群会话选择 | 建群时可选"新建会话/绑定已有会话"，提交时按选择生效 | `/create_chat`、`/建群` |
-| 手动会话绑定 | 不中断旧上下文，直接把指定 session 接入当前群 | `/session <sessionId>`、`ENABLE_MANUAL_SESSION_BIND` |
+| 手动会话绑定 | 不中断旧上下文，直接把指定 session 接入当前群 | `/session <sessionId>`、`路由模式与会话ENABLE_MANUAL_SESSION_BIND` |
 | 迁移绑定与删除保护 | 绑定已有会话时自动迁移旧群映射，并保护会话不被误删 | 自动生效（手动绑定场景） |
 | 生命周期清理兜底 | 启动清理与手动清理共用同一规则，降低误清理概率 | `/clear free session` |
 | 权限卡片闭环 | OpenCode 权限请求在飞书内完成确认并回传结果 | `permission.asked` |
@@ -58,7 +58,7 @@
 | 模型/角色/强度可视化控制 | 按会话切换模型、角色与推理强度，支持面板查看与命令操作 | `/panel`、`/model`、`/agent`、`/effort` |
 | 上下文压缩 | 在飞书直接触发会话 summarize，释放上下文窗口 | `/compact` |
 | Shell 命令透传 | 白名单 `!` 命令通过 OpenCode shell 执行并回显输出 | `!ls`、`!pwd`、`!git status` |
-| 服务端鉴权兼容 | 支持 OpenCode Server Basic Auth，不怕后续默认强制密码 | `OPENCODE_SERVER_USERNAME`、`OPENCODE_SERVER_PASSWORD` |
+| 服务端鉴权兼容 | 支持 OpenCode Server Basic Auth，不怕后续默认强制密码 | `WEB-OpenCode 对接配置-Basic Auth 认证` |
 | 文件发送到飞书 | AI 可将电脑上的文件/截图直接发送到当前飞书群聊 | `/send`、`发送文件` |
 | 工作目录/项目管理 | 创建会话时指定工作目录，支持项目别名、群默认项目、9 阶段安全校验 | `/project list`、`/session new <别名>`、`ALLOWED_DIRECTORIES` |
 | OpenCode 本地可靠性治理 | 运行时 Cron（API/命令/自然语言）+ 本地宕机自动救援（含配置备份/两级回退）+ 可选主动心跳 | `HEARTBEAT.md`、`RELIABILITY_*`、`logs/reliability-audit.jsonl` |
@@ -196,7 +196,7 @@ cd opencode-bridge
 - 这一条命令可以完成"部署与环境准备"。
 - 启动服务后，通过浏览器访问 `http://localhost:4098` 进入可视化配置面板填写飞书配置。
 
-### 2) Web 配置面板（推荐）
+### 2) Web 配置面板
 
 服务启动后，打开浏览器访问：
 ```
@@ -213,25 +213,14 @@ http://localhost:4098
 
 **首次访问**：密码在 `.env` 文件的 `ADMIN_PASSWORD` 字段，首次启动时会自动生成随机密码。
 
-### 3) 备用：手动编辑配置（传统方式）
 
-如需手动配置，可编辑 `.env` 文件：
-
-```bash
-cp .env.example .env
-```
-
-至少填写：
-- `FEISHU_APP_ID`
-- `FEISHU_APP_SECRET`
-
-### 4) 启动 OpenCode（保留 CLI 界面）
+### 3) 启动 OpenCode（保留 CLI 界面）
 
 ```bash
 opencode
 ```
 
-### 5) 启动桥接服务
+### 4) 启动桥接服务
 
 Linux/macOS：
 
@@ -253,7 +242,7 @@ npm run dev
 
 启动后访问 `http://localhost:4098` 进入 Web 配置面板。
 
-### 6）npm CLI 安装（更适合本地常驻运行场景）
+### 5）npm CLI 安装（更适合本地常驻运行场景）
 
 ```bash
 npm install -g opencode-bridge
@@ -270,14 +259,11 @@ opencode-bridge
 | 目标 | 命令 | 说明 |
 |---|---|---|
 | 一键部署 | `node scripts/deploy.mjs deploy` | 默认清洁安装后再安装依赖并编译 |
-| 一键更新升级 | `node scripts/deploy.mjs upgrade` | 默认清洁升级：先拆卸清理，再拉取并重新部署 |
-| 安装/升级 OpenCode | `node scripts/deploy.mjs opencode-install` | 执行 `npm i -g opencode-ai` |
-| 检查 OpenCode 环境 | `node scripts/deploy.mjs opencode-check` | 检查 opencode 命令与端口监听 |
-| 启动 OpenCode CLI | `node scripts/deploy.mjs opencode-start` | 自动写入 `opencode.json` 后前台执行 `opencode` |
-| 首次引导 | `node scripts/deploy.mjs guide` | 安装/部署/引导启动的一体化流程 |
-| 管理菜单 | `npm run manage:bridge` | 交互式菜单（默认入口） |
 | 启动后台 | `npm run start` | 后台启动（自动检测/补构建） |
 | 停止后台 | `node scripts/stop.mjs` | 按 PID 停止后台进程 |
+| 首次引导 | `node scripts/deploy.mjs guide` | 安装/部署/引导启动的一体化流程 |
+| 管理菜单 | `npm run manage:bridge` | 交互式菜单（默认入口） |
+
 
 详细部署说明见 [部署与运维文档](assets/docs/deployment.md)。
 
@@ -310,19 +296,17 @@ opencode-bridge
 
 | 变量 | 必填 | 默认值 | 说明 |
 |---|---|---|---|
-| `FEISHU_APP_ID` | 是 | - | 飞书应用 App ID |
-| `FEISHU_APP_SECRET` | 是 | - | 飞书应用 App Secret |
-| `OPENCODE_HOST` | 否 | `localhost` | OpenCode 地址 |
-| `OPENCODE_PORT` | 否 | `4096` | OpenCode 端口 |
-| `DISCORD_ENABLED` | 否 | `false` | 是否启用 Discord 适配器 |
-| `DISCORD_TOKEN` | 否 | - | Discord Bot Token |
+| `飞书应用 App ID` | 是 | - | WEB-平台接入-飞书（Lark）配置 |
+| `飞书应用 App Secret` | 是 | - | WEB-平台接入-飞书（Lark）配置 |
+| `是否启用 Discord 适配器` | 否 | `false` | WEB-平台接入-Discord 配置 |
+| `Discord Bot Token` | 否 | - | WEB-平台接入-Discord 配置 |
 
 完整配置详见 [配置中心文档](assets/docs/environment.md)。
 
 ### 配置存储说明
 
-**配置迁移**：首次启动时，系统会自动将 `.env` 中的业务配置迁移至 SQLite 数据库（`data/config.db`），原 `.env` 备份为 `.env.backup`。
-
+**配置迁移**：老用户，系统会自动将 `.env` 中的业务配置迁移至 SQLite 数据库（`data/config.db`），原 `.env` 备份为 `.env.backup`。
+- 新用户部署完成后直接打开web使用即可
 **敏感配置重启**：以下配置修改后需要重启服务才能生效：
 - 飞书配置（`FEISHU_APP_ID`、`FEISHU_APP_SECRET`）
 - Discord 配置（`DISCORD_ENABLED`、`DISCORD_TOKEN`）
@@ -341,14 +325,6 @@ opencode-bridge
 - **主动心跳**：可配置定时器向 Agent Session 发送检查提示
 - **自动救援**：连续失败达到阈值后自动修复本地 OpenCode（仅 loopback）
 
-### 最小配置
-
-```dotenv
-RELIABILITY_CRON_ENABLED=true
-RELIABILITY_CRON_API_ENABLED=true
-RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED=false
-RELIABILITY_LOOPBACK_ONLY=true
-```
 
 <a id="飞书后台配置"></a>
 ## ⚙️ 飞书后台配置
