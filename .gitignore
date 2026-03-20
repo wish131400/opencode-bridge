@@ -49,3 +49,6 @@ memory/
 HEARTBEAT.md
 PLAN.md
 PLAN_*.md
+
+data/
+.env.backup
