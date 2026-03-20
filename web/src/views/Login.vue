@@ -1,0 +1,128 @@
+<template>
+  <div class="login-container">
+    <el-card class="login-card" shadow="hover">
+      <template #header>
+        <div class="login-header">
+          <el-icon size="32" color="#409eff"><Monitor /></el-icon>
+          <h2>OpenCode Bridge 配置中心</h2>
+        </div>
+      </template>
+
+      <el-form :model="form" label-width="100px" size="large">
+        <el-form-item label="管理密码">
+          <el-input
+            v-model="form.password"
+            type="password"
+            placeholder="请输入 ADMIN_PASSWORD"
+            show-password
+            @keyup.enter="handleLogin"
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" :loading="loggingIn" @click="handleLogin" style="width: 100%">
+            登录
+          </el-button>
+        </el-form-item>
+
+        <el-alert
+          v-if="error"
+          type="error"
+          :closable="false"
+          show-icon
+          class="error-alert"
+        >
+          {{ error }}
+        </el-alert>
+      </el-form>
+
+      <div class="login-tip">
+        <el-text size="small" type="info">
+          密码存储在 .env 文件的 ADMIN_PASSWORD 配置项中
+        </el-text>
+      </div>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Monitor } from '@element-plus/icons-vue'
+import axios from 'axios'
+
+const router = useRouter()
+const loggingIn = ref(false)
+const error = ref('')
+
+const form = reactive({
+  password: '',
+})
+
+async function handleLogin() {
+  if (!form.password.trim()) {
+    error.value = '请输入密码'
+    return
+  }
+
+  loggingIn.value = true
+  error.value = ''
+
+  try {
+    // 先用临时 token 测试登录
+    const http = axios.create({ baseURL: '/api' })
+    http.defaults.headers.Authorization = `Bearer ${form.password}`
+
+    await http.get('/admin/status')
+
+    // 登录成功，保存 token
+    localStorage.setItem('admin_token', form.password)
+    ElMessage.success('登录成功')
+    router.push('/platforms')
+  } catch (e: any) {
+    if (e.response?.status === 401) {
+      error.value = '密码错误，请重试'
+    } else {
+      error.value = '登录失败：' + (e.message || '未知错误')
+    }
+  } finally {
+    loggingIn.value = false
+  }
+}
+</script>
+
+<style scoped>
+.login-container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.login-card {
+  width: 420px;
+}
+
+.login-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.login-tip {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.error-alert {
+  margin-top: 12px;
+}
+</style>

@@ -92,12 +92,23 @@ function ensureLogDir() {
 }
 
 function ensureBuildIfMissing() {
-  if (fs.existsSync(entryFile)) {
+  const webEntryFile = path.join(rootDir, 'dist', 'public', 'index.html');
+  const backendMissing = !fs.existsSync(entryFile);
+  const frontendMissing = !fs.existsSync(webEntryFile);
+
+  if (!backendMissing && !frontendMissing) {
     return;
   }
 
-  console.log('[start] 未检测到 dist/index.js，开始自动构建');
-  const result = runNpm(['run', 'build']);
+  if (backendMissing && frontendMissing) {
+    console.log('[start] 未检测到构建产物，开始自动全量构建');
+  } else if (backendMissing) {
+    console.log('[start] 未检测到 dist/index.js，开始自动构建');
+  } else {
+    console.log('[start] 未检测到 dist/public/index.html，开始自动构建前端控制台');
+  }
+
+  const result = runNpm(['run', 'build:all']);
 
   if (!result || result.error || result.status !== 0) {
     console.error('[start] 构建失败，启动中止');

@@ -1,0 +1,244 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <h2>平台接入配置</h2>
+      <p class="desc">配置飞书与 Discord 机器人的核心凭证和接入参数</p>
+    </div>
+
+    <el-form :model="form" label-position="top" @submit.prevent>
+
+      <!-- 飞书配置 -->
+      <el-card class="config-card">
+        <template #header>
+          <span class="card-title">🤖 飞书（Lark）配置</span>
+        </template>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="App ID" required>
+              <template #label>
+                App ID <el-tag size="small" type="danger" style="margin-left:6px">必填</el-tag>
+              </template>
+              <el-input v-model="form.FEISHU_APP_ID" placeholder="cli_xxxxxxxxxxxxx"
+                prefix-icon="Key" clearable />
+              <div class="field-tip">飞书开发者后台 → 凭证与基础信息 → App ID</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="App Secret" required>
+              <template #label>
+                App Secret <el-tag size="small" type="danger" style="margin-left:6px">必填</el-tag>
+              </template>
+              <el-input v-model="form.FEISHU_APP_SECRET" placeholder="••••••••"
+                type="password" show-password prefix-icon="Lock" />
+              <div class="field-tip">飞书开发者后台 → 凭证与基础信息 → App Secret</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="Encrypt Key（可选）">
+              <el-input v-model="form.FEISHU_ENCRYPT_KEY" placeholder="留空则不加密"
+                type="password" show-password />
+              <div class="field-tip">消息加密密钥，与飞书后台「事件订阅 → 加密策略」保持一致</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="Verification Token（可选）">
+              <el-input v-model="form.FEISHU_VERIFICATION_TOKEN" placeholder="留空则跳过验证"
+                type="password" show-password />
+              <div class="field-tip">飞书事件订阅验证 Token，用于校验请求来源</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-card>
+
+      <!-- Discord 配置 -->
+      <el-card class="config-card">
+        <template #header>
+          <div class="card-header-row">
+            <span class="card-title">🎮 Discord 配置</span>
+            <div class="inline-switch">
+              <span>启用 Discord</span>
+              <el-switch v-model="discordEnabled"
+                active-text="开启" inactive-text="关闭"
+                @change="form.DISCORD_ENABLED = discordEnabled ? 'true' : 'false'" />
+            </div>
+          </div>
+        </template>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="Bot Token">
+              <el-input v-model="form.DISCORD_TOKEN" placeholder="your-discord-bot-token"
+                type="password" show-password :disabled="!discordEnabled" />
+              <div class="field-tip">Discord Developer Portal → Bot → Token（优先使用此字段）</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="Bot Token（兼容别名 DISCORD_BOT_TOKEN）">
+              <el-input v-model="form.DISCORD_BOT_TOKEN" placeholder="与 DISCORD_TOKEN 二选一"
+                type="password" show-password :disabled="!discordEnabled" />
+              <div class="field-tip">当 DISCORD_TOKEN 未设置时使用此字段，功能完全相同</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="Client ID">
+              <el-input v-model="form.DISCORD_CLIENT_ID" placeholder="your-discord-client-id"
+                :disabled="!discordEnabled" />
+              <div class="field-tip">Discord Developer Portal → OAuth2 → Client ID</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="允许的 Bot ID 列表（可选）">
+              <el-input v-model="form.DISCORD_ALLOWED_BOT_IDS" placeholder="纯数字 ID，逗号分隔"
+                :disabled="!discordEnabled" />
+              <div class="field-tip">允许其他 Bot 加入白名单，填 Discord Snowflake ID（纯数字）</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-card>
+
+      <!-- 通用访问控制 -->
+      <el-card class="config-card">
+        <template #header>
+          <span class="card-title">🔐 访问控制</span>
+        </template>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="平台白名单（ENABLED_PLATFORMS）">
+              <el-select v-model="enabledPlatforms" multiple placeholder="留空 = 全部平台启用"
+                style="width:100%" @change="onPlatformsChange">
+                <el-option label="飞书 (feishu)" value="feishu" />
+                <el-option label="Discord (discord)" value="discord" />
+              </el-select>
+              <div class="field-tip">指定启用哪些平台，留空时所有平台均可用</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="用户白名单（ALLOWED_USERS）">
+              <el-input v-model="form.ALLOWED_USERS" placeholder="ou_xxx,ou_yyy（留空=不限制）"
+                type="textarea" :rows="2" />
+              <div class="field-tip">飞书 open_id 列表，逗号分隔。留空则不启用白名单保护</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item label="群聊触发策略（GROUP_REQUIRE_MENTION）">
+              <el-switch v-model="groupRequireMention"
+                active-text="必须 @ 机器人才响应" inactive-text="普通消息也响应"
+                @change="form.GROUP_REQUIRE_MENTION = groupRequireMention ? 'true' : 'false'" />
+              <div class="field-tip">为 true 时，群聊中只有明确 @ 机器人的消息才会触发响应</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-card>
+
+      <div class="form-actions">
+        <el-button type="primary" :loading="saving" @click="handleSave" size="large">
+          保存配置
+        </el-button>
+      </div>
+    </el-form>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useConfigStore } from '../stores/config'
+
+const store = useConfigStore()
+const saving = ref(false)
+const discordEnabled = ref(false)
+const groupRequireMention = ref(false)
+const enabledPlatforms = ref<string[]>([])
+
+const form = reactive({
+  FEISHU_APP_ID: '',
+  FEISHU_APP_SECRET: '',
+  FEISHU_ENCRYPT_KEY: '',
+  FEISHU_VERIFICATION_TOKEN: '',
+  DISCORD_ENABLED: 'false',
+  DISCORD_TOKEN: '',
+  DISCORD_BOT_TOKEN: '',
+  DISCORD_CLIENT_ID: '',
+  DISCORD_ALLOWED_BOT_IDS: '',
+  ENABLED_PLATFORMS: '',
+  ALLOWED_USERS: '',
+  GROUP_REQUIRE_MENTION: 'false',
+})
+
+onMounted(() => syncFromStore())
+
+watch(() => store.settings, () => syncFromStore(), { deep: true })
+
+function syncFromStore() {
+  const s = store.settings
+  Object.assign(form, {
+    FEISHU_APP_ID: s.FEISHU_APP_ID || '',
+    FEISHU_APP_SECRET: s.FEISHU_APP_SECRET || '',
+    FEISHU_ENCRYPT_KEY: s.FEISHU_ENCRYPT_KEY || '',
+    FEISHU_VERIFICATION_TOKEN: s.FEISHU_VERIFICATION_TOKEN || '',
+    DISCORD_ENABLED: s.DISCORD_ENABLED || 'false',
+    DISCORD_TOKEN: s.DISCORD_TOKEN || '',
+    DISCORD_BOT_TOKEN: s.DISCORD_BOT_TOKEN || '',
+    DISCORD_CLIENT_ID: s.DISCORD_CLIENT_ID || '',
+    DISCORD_ALLOWED_BOT_IDS: s.DISCORD_ALLOWED_BOT_IDS || '',
+    ENABLED_PLATFORMS: s.ENABLED_PLATFORMS || '',
+    ALLOWED_USERS: s.ALLOWED_USERS || '',
+    GROUP_REQUIRE_MENTION: s.GROUP_REQUIRE_MENTION || 'false',
+  })
+  discordEnabled.value = form.DISCORD_ENABLED === 'true'
+  groupRequireMention.value = form.GROUP_REQUIRE_MENTION === 'true'
+  enabledPlatforms.value = form.ENABLED_PLATFORMS
+    ? form.ENABLED_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
+    : []
+}
+
+function onPlatformsChange(val: string[]) {
+  form.ENABLED_PLATFORMS = val.join(',')
+}
+
+async function handleSave() {
+  if (!form.FEISHU_APP_ID || !form.FEISHU_APP_SECRET) {
+    ElMessage.error('飞书 App ID 和 App Secret 为必填项')
+    return
+  }
+  saving.value = true
+  try {
+    const result = await store.saveConfig({ ...form })
+    if (result.needRestart) {
+      ElMessageBox.confirm(
+        `以下配置需要重启才能生效：${result.changedKeys.join('、')}`,
+        '配置已保存',
+        { confirmButtonText: '立即重启', cancelButtonText: '稍后手动重启', type: 'warning' }
+      ).then(() => store.restart()).catch(() => {})
+    } else {
+      ElMessage.success('配置已保存')
+    }
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<style scoped>
+.page { max-width: 900px; }
+.page-header { margin-bottom: 24px; }
+.page-header h2 { font-size: 22px; font-weight: 600; color: #1a1a2e; }
+.desc { color: #666; margin-top: 6px; }
+.config-card { margin-bottom: 20px; }
+.card-title { font-weight: 600; font-size: 15px; }
+.card-header-row { display: flex; align-items: center; justify-content: space-between; }
+.inline-switch { display: flex; align-items: center; gap: 10px; }
+.field-tip { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.4; }
+.form-actions { text-align: right; margin-top: 8px; }
+</style>

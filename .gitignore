@@ -7,6 +7,14 @@ dist/
 # 环境变量和敏感配置
 .env
 *.env.local
+.env.backup
+
+# SQLite 配置数据库（含敏感凭证，不入库）
+data/config.db
+data/
+
+# 前端依赖
+web/node_modules/
 
 # 日志文件
 logs/

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createAdminServer } from './admin/admin-server.js';
 import { feishuClient, type FeishuMessageEvent } from './feishu/client.js';
 import { feishuAdapter } from './platform/adapters/feishu-adapter.js';
 import { discordAdapter } from './platform/adapters/discord-adapter.js';
@@ -529,11 +530,13 @@ async function main() {
   }
 
   // 3. 验证配置
+  let isFeishuConfigured = true;
   try {
     validateConfig();
   } catch (error) {
-    console.error('配置错误:', error);
-    process.exit(1);
+    console.warn('[Config] ⚠️ 飞书核心凭据未配置完备（可能是首次部署），飞书机器人核心服务暂不拉起。');
+    console.warn('[Config] 💡 核心管理后台即将启动，请前往 Web 控制台配置相关参数并按提示重启服务生效！');
+    isFeishuConfigured = false;
   }
 
   // 1.5. 路由器模式配置
@@ -1643,6 +1646,18 @@ async function main() {
   // 3.5 初始化 Reliability 生命周期（heartbeat + scheduler + rescue orchestrator）
   const reliabilityLifecycle = bootstrapReliabilityLifecycle();
 
+  // 3.6 启动可视化配置面板（外挂式，不影响主服务）
+  const adminPort = parseInt(process.env.ADMIN_PORT ?? '4098', 10);
+  const adminPassword = process.env.ADMIN_PASSWORD ?? '';
+  const adminServer = createAdminServer({
+    port: adminPort,
+    password: adminPassword,
+    cronManager: getRuntimeCronManager() ?? undefined,
+    startedAt: new Date(),
+    version: '2.9.2-beta-pr1',
+  });
+  adminServer.start();
+
   // 4. 监听飞书消息（通过路由器分发）
   feishuClient.on('message', async (event) => {
     await reliabilityLifecycle.onInboundMessage();
@@ -1794,7 +1809,7 @@ async function main() {
 
     return await cardActionHandler.handle(event);
   });
-  await feishuClient.start();
+  if (isFeishuConfigured) { await feishuClient.start(); } else { console.log('[System] 飞书长连接暂未启动 (等待凭据配置)'); }
 
   // 9. 启动清理检查
   await lifecycleHandler.cleanUpOnStart();
