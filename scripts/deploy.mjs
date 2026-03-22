@@ -796,7 +796,21 @@ async function deployProject(options = {}) {
   console.log('\n[deploy] OpenCode 环境预检（仅提示，不阻断部署）');
   await checkOpencodeEnvironment({ warnOnly: true });
 
-  run('npm', ['install', '--include=dev'], '安装后端依赖');
+  // 设置 puppeteer 国内镜像，解决 Google 服务器访问问题
+  const originalPuppeteerHost = process.env.PUPPETEER_DOWNLOAD_HOST;
+  process.env.PUPPETEER_DOWNLOAD_HOST = 'https://cdn.npmmirror.com/binaries/chrome-for-testing';
+
+  try {
+    run('npm', ['install', '--include=dev'], '安装后端依赖');
+  } finally {
+    // 恢复原环境变量
+    if (originalPuppeteerHost === undefined) {
+      delete process.env.PUPPETEER_DOWNLOAD_HOST;
+    } else {
+      process.env.PUPPETEER_DOWNLOAD_HOST = originalPuppeteerHost;
+    }
+  }
+
   run('npm', ['run', 'build:web'], '编译前端控制台');
   run('npm', ['run', 'build'], '编译后端服务');
   syncBridgeAgents();
@@ -912,6 +926,13 @@ function cleanupForCleanInstall(contextLabel) {
   if (fs.existsSync(nodeModulesDir)) {
     fs.rmSync(nodeModulesDir, { recursive: true, force: true });
     removedTargets.push('node_modules');
+  }
+
+  // 清理可能损坏的 puppeteer 浏览器缓存
+  const puppeteerCacheDir = path.join(os.homedir(), '.cache', 'puppeteer');
+  if (fs.existsSync(puppeteerCacheDir)) {
+    fs.rmSync(puppeteerCacheDir, { recursive: true, force: true });
+    removedTargets.push('~/.cache/puppeteer');
   }
 
   const removedTarballs = cleanupPackageTarballs();
