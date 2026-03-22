@@ -171,38 +171,62 @@ function isOpenCodeCommand(command) {
   return /\bopencode\b/.test(command) || command.includes('opencode-cli');
 }
 
-function isBridgeProcessByCommand(pid) {
-  if (isWindows()) {
-    const result = spawnSync('wmic', [
-      'process', 'where', `ProcessId=${pid}`,
-      'get', 'CommandLine', '/value'
-    ], {
-      encoding: 'utf-8',
-    });
+function getProcessCommandLine(pid) {
+  if (!isWindows()) {
+    return null;
+  }
 
-    if (!result.error && result.status === 0) {
-      const output = result.stdout || '';
-      return isBridgeCommand(output);
+  // 优先使用 PowerShell（Windows 11 兼容）
+  const psResult = spawnSync('powershell', [
+    '-NoProfile',
+    '-Command',
+    `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`
+  ], {
+    encoding: 'utf-8',
+    timeout: 5000,
+  });
+
+  if (!psResult.error && psResult.status === 0) {
+    const cmd = (psResult.stdout || '').trim();
+    if (cmd) {
+      return cmd;
     }
   }
-  return false;
+
+  // 回退到 wmic（旧版 Windows）
+  const wmicResult = spawnSync('wmic', [
+    'process', 'where', `ProcessId=${pid}`,
+    'get', 'CommandLine', '/value'
+  ], {
+    encoding: 'utf-8',
+    timeout: 5000,
+  });
+
+  if (!wmicResult.error && wmicResult.status === 0) {
+    const output = wmicResult.stdout || '';
+    const match = output.match(/CommandLine=(.+)/);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function isBridgeProcessByCommand(pid) {
+  if (!isWindows()) {
+    return false;
+  }
+  const cmd = getProcessCommandLine(pid);
+  return cmd ? isBridgeCommand(cmd) : false;
 }
 
 function isOpenCodeProcessByCommand(pid) {
-  if (isWindows()) {
-    const result = spawnSync('wmic', [
-      'process', 'where', `ProcessId=${pid}`,
-      'get', 'CommandLine', '/value'
-    ], {
-      encoding: 'utf-8',
-    });
-
-    if (!result.error && result.status === 0) {
-      const output = result.stdout || '';
-      return isOpenCodeCommand(output);
-    }
+  if (!isWindows()) {
+    return false;
   }
-  return false;
+  const cmd = getProcessCommandLine(pid);
+  return cmd ? isOpenCodeCommand(cmd) : false;
 }
 
 // ==================== 进程终止 ====================

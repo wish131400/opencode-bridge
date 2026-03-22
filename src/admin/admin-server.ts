@@ -384,8 +384,34 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
         // 忽略 git 错误，可能是本地修改
       }
 
-      // 安装依赖
-      execSync('npm install --include=dev', { encoding: 'utf-8', cwd: process.cwd() });
+      // 根据时区判断是否使用国内镜像
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      const isChinaRegion = timezone.startsWith('Asia/Shanghai')
+        || timezone.startsWith('Asia/Chongqing')
+        || timezone.startsWith('Asia/Hong_Kong')
+        || timezone.startsWith('Asia/Taipei')
+        || timezone.startsWith('Asia/Macau');
+
+      const originalEnv = process.env.PUPPETEER_DOWNLOAD_HOST;
+      let puppeteerHostSet = false;
+
+      if (isChinaRegion && !originalEnv) {
+        process.env.PUPPETEER_DOWNLOAD_HOST = 'https://cdn.npmmirror.com/binaries/chrome-for-testing';
+        puppeteerHostSet = true;
+      }
+
+      try {
+        // 安装依赖
+        execSync('npm install --include=dev', { encoding: 'utf-8', cwd: process.cwd() });
+      } finally {
+        if (puppeteerHostSet) {
+          if (originalEnv) {
+            process.env.PUPPETEER_DOWNLOAD_HOST = originalEnv;
+          } else {
+            delete process.env.PUPPETEER_DOWNLOAD_HOST;
+          }
+        }
+      }
 
       // 构建前端
       execSync('npm run build:web', { encoding: 'utf-8', cwd: process.cwd() });
