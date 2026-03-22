@@ -12,7 +12,7 @@
         <template #header><span class="card-title">🔀 路由模式与会话</span></template>
         <el-row :gutter="24">
           <el-col :span="12">
-            <el-form-item label="路由器模式（ROUTER_MODE）">
+            <el-form-item label="路由模式（ROUTER_MODE）">
               <el-select v-model="form.ROUTER_MODE" style="width:100%">
                 <el-option value="legacy" label="legacy — 稳定模式（推荐生产使用）" />
                 <el-option value="dual" label="dual — 双轨对比模式（记录新旧路由差异日志）" />
