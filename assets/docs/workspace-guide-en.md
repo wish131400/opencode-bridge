@@ -1,14 +1,17 @@
 # Working Directory and Project Strategy Guide
 
-This document describes the working directory strategy, command entry points, and security constraints.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
 
 ---
 
 ## 1. Design Goals
 
-- Allow users to securely select working directories from chat interface
-- Maintain consistent behavior across platforms: configurable directories, inheritable sessions, traceable permissions
-- Avoid "task stuck after directory switch" instance mismatch issues
+| Goal | Description |
+|------|-------------|
+| **Secure directory selection** | Allow users to securely select working directories from chat interface |
+| **Cross-platform consistency** | Maintain consistent behavior across all platforms |
+| **Prevent instance mismatch** | Avoid "task stuck after directory switch" issues |
 
 ---
 
@@ -16,34 +19,43 @@ This document describes the working directory strategy, command entry points, an
 
 When creating or switching sessions, directory sources are resolved in this priority:
 
-1. **Explicit input** (command argument / card input)
-2. **Project aliases** (`PROJECT_ALIASES`)
-3. **Group default** (session-bound storage)
-4. **Global default** (`DEFAULT_WORK_DIRECTORY`)
-5. **OpenCode server default**
+```
+1. Explicit input (command argument / card input)
+          ↓
+2. Project aliases (PROJECT_ALIASES)
+          ↓
+3. Group default (session-bound storage)
+          ↓
+4. Global default (DEFAULT_WORK_DIRECTORY)
+          ↓
+5. OpenCode server default
+```
 
-Implementation: `src/utils/directory-policy.ts`
+**Implementation**: `src/utils/directory-policy.ts`
 
 ---
 
 ## 3. Security Rules
 
+### Validation Pipeline
+
 Directory decisions go through a complete validation pipeline:
 
-### Validation Steps
-
-1. Path format and length checks
-2. Dangerous path interception
-3. Whitelist checks (`ALLOWED_DIRECTORIES`)
-4. Existence and accessibility checks
-5. realpath resolution and secondary whitelist check
-6. Git root normalization and re-validation
+| Stage | Check |
+|-------|-------|
+| 1 | Path format and length checks |
+| 2 | Dangerous path interception |
+| 3 | Whitelist checks (`ALLOWED_DIRECTORIES`) |
+| 4 | Existence and accessibility checks |
+| 5 | realpath resolution and secondary whitelist check |
+| 6 | Git root normalization and re-validation |
 
 ### Security Defaults
 
-- When validation fails, users see a generic message
-- Full paths are only logged server-side
-- Unconfigured `ALLOWED_DIRECTORIES` blocks custom paths
+| Default | Description |
+|---------|-------------|
+| Generic error messages | Users see sanitized messages; full paths only in server logs |
+| Whitelist required | Unconfigured `ALLOWED_DIRECTORIES` blocks custom paths |
 
 ---
 
@@ -51,12 +63,14 @@ Directory decisions go through a complete validation pipeline:
 
 The "working project (optional)" dropdown in Feishu private chat `create_chat` panel combines:
 
-- `DEFAULT_WORK_DIRECTORY`
-- `ALLOWED_DIRECTORIES`
-- Existing session directories (historical and bound sessions)
-- Project aliases (`PROJECT_ALIASES`)
+| Source | Description |
+|--------|-------------|
+| `DEFAULT_WORK_DIRECTORY` | Global default directory |
+| `ALLOWED_DIRECTORIES` | Whitelisted directories |
+| Existing session directories | Historical and bound sessions |
+| `PROJECT_ALIASES` | Project alias mappings |
 
-Even without historical projects, the dropdown retains a "follow default project" option.
+**Note**: Even without historical projects, the dropdown retains a "follow default project" option.
 
 ---
 
@@ -80,7 +94,7 @@ Even without historical projects, the dropdown retains a "follow default project
 | `///workdir` | View current working directory |
 | `///workdir <path\|alias>` | Set working directory |
 | `///workdir clear` | Clear working directory |
-| `///new [name] [--dir path\|alias]` | Create with directory |
+| `///new [name] [--dir path\|alias]` | Create session with directory |
 | `///new-channel [name] [--dir path\|alias]` | Create channel with directory |
 | `///create_chat` | Dropdown session control |
 
@@ -99,21 +113,25 @@ GIT_ROOT_NORMALIZATION=true
 
 ### Configuration Notes
 
-- Unconfigured `ALLOWED_DIRECTORIES` restricts user custom path capability
-- `PROJECT_ALIASES` should only contain commonly used projects to avoid dropdown clutter
-- Paths are validated against whitelist after normalization
+| Variable | Note |
+|----------|------|
+| `ALLOWED_DIRECTORIES` | Unconfigured restricts user custom path capability |
+| `PROJECT_ALIASES` | Should only contain commonly used projects to avoid dropdown clutter |
+| `GIT_ROOT_NORMALIZATION` | Paths are validated against whitelist after normalization |
 
 ---
 
 ## 7. Permission and Directory Consistency
 
-Permission responses include directory candidates:
+Permission responses include directory candidates to reduce deadlocks:
 
-1. **Priority**: Current session directory (`resolvedDirectory/defaultDirectory`)
-2. **Fallback**: Known directory list
-3. **Final**: Default directory instance
+| Priority | Source |
+|----------|--------|
+| 1 | Current session directory (`resolvedDirectory/defaultDirectory`) |
+| 2 | Known directory list |
+| 3 | Default directory instance |
 
-This reduces permission confirmation deadlocks after directory switches.
+This reduces "permission allowed but task stuck" issues after directory switches.
 
 ---
 
@@ -121,23 +139,39 @@ This reduces permission confirmation deadlocks after directory switches.
 
 ### Q: Why is my directory not allowed?
 
-- Check if path is within `ALLOWED_DIRECTORIES`
-- Check if realpath-resolved path is still within whitelist (common with symlinks)
+| Check | Action |
+|-------|--------|
+| Whitelist | Verify path is within `ALLOWED_DIRECTORIES` |
+| Symlinks | Check realpath-resolved path is still within whitelist |
 
 ### Q: Why can't I see historical projects in /create_chat?
 
-- Directory may be filtered by whitelist
-- Non-existent or unreadable directories are automatically excluded
+| Check | Action |
+|-------|--------|
+| Whitelist filter | Directory may be filtered by whitelist |
+| Existence | Non-existent or unreadable directories are automatically excluded |
 
-### Q: Directory switched but permission "allowed" but task didn't continue?
+### Q: Directory switched but permission "allowed" yet task didn't continue?
 
-- Check logs for whether permission response hit directory candidates
-- Confirm OpenCode instance matches current session directory
+| Check | Action |
+|-------|--------|
+| Logs | Check if permission response hit directory candidates |
+| Instance match | Confirm OpenCode instance matches current session directory |
 
 ---
 
 ## 9. Maintenance Recommendations
 
-- Directory-related changes must include tests (directory policy + panel options + permission response)
-- Before release, at minimum run `npm run build` and `npm test`
-- Directory policy changes should sync `.env.example` and README environment variable sections
+| Recommendation | Description |
+|----------------|-------------|
+| **Tests required** | Directory changes must include tests (policy + panel options + permission response) |
+| **Pre-release check** | Run `npm run build` and `npm test` before release |
+| **Documentation sync** | Update `.env.example` and README environment variable sections |
+
+---
+
+## 10. Related Documentation
+
+- [Implementation Details](implementation-en.md) - Directory policy implementation
+- [Configuration Center](environment-en.md) - Directory-related configuration
+- [Commands Reference](commands-en.md) - Directory-related commands

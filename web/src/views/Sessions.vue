@@ -8,7 +8,7 @@
         </div>
         <div class="header-actions">
           <el-button :icon="Plus" type="primary" @click="openBindDialog()">新增绑定</el-button>
-          <el-button :icon="Refresh" @click="loadData" :loading="loading">刷新</el-button>
+          <el-button :icon="Refresh" @click="loadData(true)" :loading="loading">刷新</el-button>
         </div>
       </div>
     </div>
@@ -197,25 +197,44 @@
           <el-select v-model="bindForm.platform" placeholder="选择平台" style="width:100%">
             <el-option v-for="p in platforms" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
+          <div class="form-hint" v-if="bindForm.platform === 'feishu'">
+            飞书 API 限制：仅支持扫描群聊，无法获取私聊列表
+          </div>
         </el-form-item>
 
         <el-form-item label="会话 ID" prop="conversationId">
           <el-select
             v-model="bindForm.conversationId"
-            placeholder="选择或输入平台会话 ID"
+            :placeholder="bindForm.platform ? '选择平台聊天' : '请先选择平台'"
             style="width:100%"
             filterable
             allow-create
             default-first-option
+            :loading="loadingPlatformChats"
+            :disabled="!bindForm.platform"
+            @change="handleChatSelect"
           >
             <el-option
-              v-for="item in availableConversationIds"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
+              v-for="chat in platformChats"
+              :key="chat.id"
+              :label="chat.name"
+              :value="chat.id"
+            >
+              <div class="chat-option">
+                <span class="chat-name">{{ chat.name }}</span>
+                <el-tag :type="chat.type === 'p2p' ? 'success' : chat.type === 'channel' ? 'warning' : 'info'" size="small">
+                  {{ chat.type === 'p2p' ? '私聊' : chat.type === 'channel' ? '频道' : '群聊' }}
+                </el-tag>
+                <el-tag v-if="chat.isBound" type="danger" size="small" class="bound-tag">已绑定</el-tag>
+              </div>
+            </el-option>
           </el-select>
-          <div class="form-hint">如飞书群ID、Discord频道ID等，可从已有绑定中选择或输入新的</div>
+          <div class="form-hint">
+            <template v-if="!bindForm.platform">请先选择平台，系统将自动加载该平台的聊天列表</template>
+            <template v-else-if="bindForm.platform === 'feishu'">飞书 API 限制：仅支持扫描群聊，无法获取私聊列表</template>
+            <template v-else-if="platformChats.length === 0 && !loadingPlatformChats">该平台暂无可用聊天，请手动输入会话 ID</template>
+            <template v-else>选择平台聊天或手动输入会话 ID</template>
+          </div>
         </el-form-item>
 
         <el-form-item label="标题">
@@ -223,11 +242,13 @@
         </el-form-item>
 
         <el-form-item label="会话类型">
-          <el-radio-group v-model="bindForm.chatType">
-            <el-radio label="">未指定</el-radio>
-            <el-radio label="p2p">私聊</el-radio>
-            <el-radio label="group">群聊</el-radio>
-          </el-radio-group>
+          <el-input v-model="bindForm.chatType" disabled placeholder="选择聊天后自动识别">
+            <template #append>
+              <el-tag :type="bindForm.chatType === 'p2p' ? 'success' : bindForm.chatType === 'group' ? 'info' : 'info'" size="small">
+                {{ bindForm.chatType === 'p2p' ? '私聊' : bindForm.chatType === 'group' ? '群聊' : '未指定' }}
+              </el-tag>
+            </template>
+          </el-input>
         </el-form-item>
 
         <el-form-item label="工作目录">
@@ -255,14 +276,20 @@ import {
   sessionApi,
   type PlatformInfo,
   type OpenCodeSession,
+  type PlatformChat,
 } from '../api/index'
 
 const loading = ref(false)
 const loadingSessions = ref(false)
+const loadingPlatformChats = ref(false)
 const sessions = ref<OpenCodeSession[]>([])
 const platforms = ref<PlatformInfo[]>([])
 const openCodeSessions = ref<OpenCodeSession[]>([])
 const openCodeAvailable = ref(true)
+const platformChats = ref<PlatformChat[]>([])
+const dataLoadedOnce = ref(false)
+const lastLoadedTime = ref<number>(0)
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000 // 5 分钟缓存
 
 const filterBindStatus = ref<'bound' | 'unbound' | ''>('')
 const filterPlatform = ref('')
@@ -328,32 +355,6 @@ const filteredSessions = computed(() => {
 
 const total = computed(() => filteredSessions.value.length)
 
-// 可选的会话ID列表（从已有绑定中收集）
-const availableConversationIds = computed(() => {
-  const idSet = new Map<string, { platform: string; conversationId: string; title?: string; chatType?: string }>()
-
-  for (const session of sessions.value) {
-    for (const b of session.bindings) {
-      const key = `${b.platform}:${b.conversationId}`
-      if (!idSet.has(b.conversationId)) {
-        idSet.set(b.conversationId, {
-          platform: b.platform,
-          conversationId: b.conversationId,
-          title: b.title,
-          chatType: b.chatType,
-        })
-      }
-    }
-  }
-
-  return Array.from(idSet.values()).map(item => ({
-    value: item.conversationId,
-    label: item.title
-      ? `${item.conversationId.slice(0, 16)}... (${getPlatformName(item.platform)}${item.chatType ? ` - ${item.chatType === 'p2p' ? '私聊' : '群聊'}` : ''})`
-      : `${item.conversationId.slice(0, 20)}... (${getPlatformName(item.platform)})`,
-  }))
-})
-
 // 分页后的数据
 const pagedSessions = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
@@ -390,8 +391,44 @@ watch([filterBindStatus, filterPlatform], () => {
   currentPage.value = 1
 })
 
-async function loadData() {
+// 监听平台选择，加载该平台的聊天列表
+watch(() => bindForm.value.platform, async (newPlatform) => {
+  if (newPlatform && bindDialogVisible.value) {
+    // 重置会话类型和已选聊天
+    bindForm.value.chatType = ''
+    bindForm.value.conversationId = ''
+    platformChats.value = []
+    await loadPlatformChats(newPlatform)
+  }
+})
+
+async function loadPlatformChats(platform: string) {
+  loadingPlatformChats.value = true
+  platformChats.value = []
+  try {
+    const result = await sessionApi.getPlatformChats(platform)
+    platformChats.value = result.chats
+  } catch (e: any) {
+    console.error('获取平台聊天列表失败:', e)
+    ElMessage.warning('获取平台聊天列表失败，请手动输入会话 ID')
+  } finally {
+    loadingPlatformChats.value = false
+  }
+}
+
+async function loadData(forceRefresh = false) {
   loading.value = true
+
+  // 检查缓存是否有效
+  const now = Date.now()
+  const cacheValid = !forceRefresh && dataLoadedOnce.value && (now - lastLoadedTime.value) < CACHE_MAX_AGE_MS
+
+  if (cacheValid) {
+    console.log('[Sessions] 使用缓存数据')
+    loading.value = false
+    return
+  }
+
   try {
     const [sessionsResult, platformsResult] = await Promise.all([
       sessionApi.getOpenCodeSessions(),
@@ -405,6 +442,10 @@ async function loadData() {
     if (!sessionsResult.openCodeAvailable) {
       ElMessage.warning('OpenCode 服务不可用，仅显示本地绑定数据')
     }
+
+    dataLoadedOnce.value = true
+    lastLoadedTime.value = now
+    console.log(`[Sessions] 数据已加载，共 ${sessions.value.length} 个会话`)
   } catch (e: any) {
     ElMessage.error('加载数据失败: ' + e.message)
   } finally {
@@ -445,7 +486,22 @@ function openBindDialog(binding?: undefined, sessionId?: string) {
     sessionDirectory: '',
     creatorId: '',
   }
+  platformChats.value = []
   bindDialogVisible.value = true
+}
+
+function handleChatSelect(chatId: string) {
+  const chat = platformChats.value.find(c => c.id === chatId)
+  if (chat) {
+    // 自动填充标题
+    if (!bindForm.value.title) {
+      bindForm.value.title = chat.name
+    }
+    // 自动填充会话类型
+    if (!bindForm.value.chatType && chat.type !== 'channel') {
+      bindForm.value.chatType = chat.type
+    }
+  }
 }
 
 async function handleSubmitBind() {
@@ -685,6 +741,19 @@ async function handleBatchDelete() {
   color: #909399;
 }
 .bound-tag { margin-left: auto; }
+
+.chat-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.chat-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .form-hint {
   font-size: 12px;

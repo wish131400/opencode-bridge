@@ -5,7 +5,9 @@
       <p class="desc">配置路由模式、输出显示、工作目录、工具白名单等核心行为参数</p>
     </div>
 
-    <el-form :model="form" label-position="top" @submit.prevent>
+    <div class="page-layout">
+      <div class="form-area">
+        <el-form :model="form" label-position="top" @submit.prevent>
 
       <!-- 路由与会话 -->
       <el-card class="config-card">
@@ -179,11 +181,18 @@
           </el-col>
         </el-row>
       </el-card>
-
-      <div class="form-actions">
-        <el-button type="primary" :loading="saving" @click="handleSave" size="large">保存配置</el-button>
-      </div>
     </el-form>
+      </div>
+
+      <div class="sidebar">
+        <ConfigActionBar
+          :saving="saving"
+          :config-data="form"
+          @save="handleSave"
+          @import-config="handleImportConfig"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -191,6 +200,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useConfigStore } from '../stores/config'
+import ConfigActionBar from '../components/ConfigActionBar.vue'
 
 const store = useConfigStore()
 const saving = ref(false)
@@ -264,16 +274,58 @@ async function handleSave() {
     saving.value = false
   }
 }
+
+function handleImportConfig(config: typeof form) {
+  Object.assign(form, config)
+  // 同步开关状态
+  enableManualBind.value = form.ENABLE_MANUAL_SESSION_BIND !== 'false'
+  showThinking.value = form.SHOW_THINKING_CHAIN !== 'false'
+  showTool.value = form.SHOW_TOOL_CHAIN !== 'false'
+  gitRoot.value = form.GIT_ROOT_NORMALIZATION !== 'false'
+}
 </script>
 
 <style scoped>
-.page { max-width: 960px; }
+.page { max-width: 1100px; }
 .page-header { margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; font-weight: 600; color: #1a1a2e; }
 .desc { color: #666; margin-top: 6px; }
+
+.page-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.form-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 20px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  padding: 16px;
+}
+
 .config-card { margin-bottom: 20px; }
 .card-title { font-weight: 600; font-size: 15px; }
 .field-tip { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.4; }
-.form-actions { text-align: right; margin-top: 8px; }
 code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+
+@media (max-width: 900px) {
+  .page-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+    order: -1;
+  }
+}
 </style>

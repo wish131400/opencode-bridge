@@ -761,7 +761,13 @@ export class WeixinHandler {
   private async handleModels(conversationId: string, sender?: PlatformSender): Promise<void> {
     try {
       const providersResult = await opencodeClient.getProviders();
-      const providers = Array.isArray(providersResult.providers) ? providersResult.providers : [];
+      const providers = Array.isArray(providersResult?.providers) ? providersResult.providers : [];
+
+      if (providers.length === 0) {
+        console.warn('[Weixin] No providers found in getProviders result');
+        await sender?.sendText(conversationId, '❌ 未找到可用的模型提供商，请检查 OpenCode 配置');
+        return;
+      }
 
       const lines: string[] = ['📋 **可用模型列表**\n'];
       let totalCount = 0;
@@ -771,14 +777,27 @@ export class WeixinHandler {
         const providerName = (provider as Record<string, unknown>).name || providerId || 'Unknown';
         const rawModels = (provider as Record<string, unknown>).models;
 
+        // models 可能是数组，也可能是对象（Map）
         const models: Array<{ id: string; name?: string }> = [];
         if (Array.isArray(rawModels)) {
           for (const m of rawModels) {
             if (m && typeof m === 'object') {
               const mr = m as Record<string, unknown>;
               models.push({
-                id: (mr.id as string) || (mr.modelID as string) || '',
+                id: (mr.id as string) || '',
                 name: mr.name as string | undefined,
+              });
+            }
+          }
+        } else if (rawModels && typeof rawModels === 'object') {
+          // SDK 返回的是对象 Map<string, Model>
+          const modelMap = rawModels as Record<string, unknown>;
+          for (const [modelId, modelInfo] of Object.entries(modelMap)) {
+            if (modelInfo && typeof modelInfo === 'object') {
+              const mi = modelInfo as Record<string, unknown>;
+              models.push({
+                id: modelId,
+                name: (mi.name as string) || modelId,
               });
             }
           }

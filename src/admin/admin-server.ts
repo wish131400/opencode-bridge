@@ -784,10 +784,22 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
     // 检测 QQ 配置
     try {
       const settings = configStore.get();
-      if (settings.QQ_ENABLED === 'true' && (settings.QQ_ONEBOT_WS_URL || settings.QQ_ONEBOT_HTTP_URL)) {
-        health.checks.qq = { status: 'ok', message: 'QQ OneBot 已配置' };
-      } else if (settings.QQ_ENABLED === 'true') {
-        health.checks.qq = { status: 'warning', message: 'QQ 已启用但 OneBot 地址未配置' };
+      if (settings.QQ_ENABLED === 'true') {
+        const protocol = settings.QQ_PROTOCOL || 'onebot';
+        if (protocol === 'official') {
+          if (settings.QQ_APP_ID && settings.QQ_SECRET) {
+            health.checks.qq = { status: 'ok', message: 'QQ 官方 API 已配置' };
+          } else {
+            health.checks.qq = { status: 'warning', message: 'QQ 已启用但官方 API 凭据未配置' };
+          }
+        } else {
+          // OneBot 协议
+          if (settings.QQ_ONEBOT_WS_URL || settings.QQ_ONEBOT_HTTP_URL) {
+            health.checks.qq = { status: 'ok', message: 'QQ OneBot 已配置' };
+          } else {
+            health.checks.qq = { status: 'warning', message: 'QQ 已启用但 OneBot 地址未配置' };
+          }
+        }
       } else {
         health.checks.qq = { status: 'ok', message: 'QQ 未启用' };
       }

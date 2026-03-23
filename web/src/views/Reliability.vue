@@ -5,7 +5,9 @@
       <p class="desc">配置 Cron 调度、心跳探活与宕机救援策略</p>
     </div>
 
-    <el-form :model="form" label-position="top" @submit.prevent>
+    <div class="page-layout">
+      <div class="form-area">
+        <el-form :model="form" label-position="top" @submit.prevent>
 
       <!-- Cron 调度 -->
       <el-card class="config-card">
@@ -198,11 +200,18 @@
           </el-col>
         </el-row>
       </el-card>
-
-      <div class="form-actions">
-        <el-button type="primary" :loading="saving" @click="handleSave" size="large">保存配置</el-button>
-      </div>
     </el-form>
+      </div>
+
+      <div class="sidebar">
+        <ConfigActionBar
+          :saving="saving"
+          :config-data="form"
+          @save="handleSave"
+          @import-config="handleImportConfig"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -210,6 +219,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useConfigStore } from '../stores/config'
+import ConfigActionBar from '../components/ConfigActionBar.vue'
 
 const store = useConfigStore()
 const saving = ref(false)
@@ -305,17 +315,65 @@ async function handleSave() {
     saving.value = false
   }
 }
+
+function handleImportConfig(config: typeof form) {
+  Object.assign(form, config)
+  // 同步状态
+  cronEnabled.value = form.RELIABILITY_CRON_ENABLED === 'true'
+  cronOrphanCleanup.value = form.RELIABILITY_CRON_ORPHAN_AUTO_CLEANUP === 'true'
+  cronForwardPrivate.value = form.RELIABILITY_CRON_FORWARD_TO_PRIVATE === 'true'
+  cronApiEnabled.value = form.RELIABILITY_CRON_API_ENABLED === 'true'
+  cronApiPortNum.value = parseInt(form.RELIABILITY_CRON_API_PORT) || 4097
+  proactiveHeartbeat.value = form.RELIABILITY_PROACTIVE_HEARTBEAT_ENABLED === 'true'
+  inboundHeartbeat.value = form.RELIABILITY_INBOUND_HEARTBEAT_ENABLED === 'true'
+  failureThresholdNum.value = parseInt(form.RELIABILITY_FAILURE_THRESHOLD) || 3
+  repairBudgetNum.value = parseInt(form.RELIABILITY_REPAIR_BUDGET) || 3
+  loopbackOnly.value = form.RELIABILITY_LOOPBACK_ONLY !== 'false'
+}
 </script>
 
 <style scoped>
-.page { max-width: 960px; }
+.page { max-width: 1100px; }
 .page-header { margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; font-weight: 600; color: #1a1a2e; }
 .desc { color: #666; margin-top: 6px; }
+
+.page-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.form-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 20px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  padding: 16px;
+}
+
 .config-card { margin-bottom: 20px; }
 .card-title { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .card-title ::v-deep(.emoji) { font-size: 20px; }
 .card-header-row { display: flex; align-items: center; justify-content: space-between; }
 .field-tip { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.4; }
-.form-actions { text-align: right; margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .page-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+    order: -1;
+  }
+}
 </style>

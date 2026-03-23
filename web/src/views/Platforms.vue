@@ -5,7 +5,9 @@
       <p class="desc">配置飞书、Discord、企业微信、个人微信、Telegram、QQ 与 WhatsApp 机器人的核心凭证和接入参数</p>
     </div>
 
-    <el-form :model="form" label-position="top" @submit.prevent>
+    <div class="page-layout">
+      <div class="form-area">
+        <el-form :model="form" label-position="top" @submit.prevent>
 
       <!-- 飞书配置 -->
       <el-card class="config-card">
@@ -271,30 +273,19 @@
           <el-col :span="12">
             <el-form-item label="App ID">
               <el-input v-model="form.QQ_APP_ID" :disabled="!qqEnabled" placeholder="QQ 开放平台应用 ID" />
-              <div class="field-tip">从 QQ 开放平台获取</div>
+              <div class="field-tip">从 QQ 机器人开放平台获取</div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="Secret">
               <el-input v-model="form.QQ_SECRET" type="password" show-password :disabled="!qqEnabled" placeholder="QQ 开放平台应用密钥" />
-              <div class="field-tip">从 QQ 开放平台获取</div>
+              <div class="field-tip">从 QQ 机器人开放平台获取</div>
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="24" v-if="form.QQ_PROTOCOL === 'official'">
-          <el-col :span="12">
-            <el-form-item label="回调地址 (可选)">
-              <el-input v-model="form.QQ_CALLBACK_URL" :disabled="!qqEnabled" placeholder="https://your-domain.com/qq/webhook" />
-              <div class="field-tip">Webhook 回调地址，用于接收消息</div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="加密密钥 (可选)">
-              <el-input v-model="form.QQ_ENCRYPT_KEY" type="password" show-password :disabled="!qqEnabled" placeholder="消息加密密钥" />
-              <div class="field-tip">用于解密回调消息</div>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-alert v-if="form.QQ_PROTOCOL === 'official'" type="info" :closable="false" style="margin-top: 8px">
+          官方 API 使用 WebSocket 连接接收消息，无需配置回调地址。
+        </el-alert>
 
         <!-- OneBot 配置 -->
         <el-row :gutter="24" v-if="form.QQ_PROTOCOL === 'onebot'">
@@ -421,13 +412,18 @@
           </el-col>
         </el-row>
       </el-card>
-
-      <div class="form-actions">
-        <el-button type="primary" :loading="saving" @click="handleSave" size="large">
-          保存配置
-        </el-button>
-      </div>
     </el-form>
+      </div>
+
+      <div class="sidebar">
+        <ConfigActionBar
+          :saving="saving"
+          :config-data="form"
+          @save="handleSave"
+          @import-config="handleImportConfig"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -436,6 +432,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useConfigStore } from '../stores/config'
 import { weixinApi, type WeixinAccount } from '../api'
+import ConfigActionBar from '../components/ConfigActionBar.vue'
 
 const store = useConfigStore()
 const saving = ref(false)
@@ -642,8 +639,6 @@ const form = reactive({
   QQ_ONEBOT_WS_URL: '',
   QQ_APP_ID: '',
   QQ_SECRET: '',
-  QQ_CALLBACK_URL: '',
-  QQ_ENCRYPT_KEY: '',
   WHATSAPP_ENABLED: 'false',
   WHATSAPP_MODE: 'personal',
   WHATSAPP_SESSION_PATH: '',
@@ -679,8 +674,6 @@ function syncFromStore() {
     QQ_ONEBOT_WS_URL: s.QQ_ONEBOT_WS_URL || '',
     QQ_APP_ID: s.QQ_APP_ID || '',
     QQ_SECRET: s.QQ_SECRET || '',
-    QQ_CALLBACK_URL: s.QQ_CALLBACK_URL || '',
-    QQ_ENCRYPT_KEY: s.QQ_ENCRYPT_KEY || '',
     WHATSAPP_ENABLED: s.WHATSAPP_ENABLED || 'false',
     WHATSAPP_MODE: s.WHATSAPP_MODE || 'personal',
     WHATSAPP_SESSION_PATH: s.WHATSAPP_SESSION_PATH || '',
@@ -749,6 +742,25 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+function handleImportConfig(config: typeof form) {
+  Object.assign(form, config)
+  // 同步开关状态
+  feishuEnabled.value = form.FEISHU_ENABLED === 'true'
+  discordEnabled.value = form.DISCORD_ENABLED === 'true'
+  wecomEnabled.value = form.WECOM_ENABLED === 'true'
+  weixinEnabled.value = form.WEIXIN_ENABLED === 'true'
+  telegramEnabled.value = form.TELEGRAM_ENABLED === 'true'
+  qqEnabled.value = form.QQ_ENABLED === 'true'
+  whatsappEnabled.value = form.WHATSAPP_ENABLED === 'true'
+  groupRequireMention.value = form.GROUP_REQUIRE_MENTION === 'true'
+  enabledPlatforms.value = form.ENABLED_PLATFORMS
+    ? form.ENABLED_PLATFORMS.split(',').map(s => s.trim()).filter(Boolean)
+    : []
+  allowedUsers.value = form.ALLOWED_USERS
+    ? form.ALLOWED_USERS.split(',').map(s => s.trim()).filter(Boolean)
+    : []
 }
 
 // 微信账号管理
@@ -858,16 +870,38 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { max-width: 900px; }
+.page { max-width: 1100px; }
 .page-header { margin-bottom: 24px; }
 .page-header h2 { font-size: 22px; font-weight: 600; color: #1a1a2e; }
 .desc { color: #666; margin-top: 6px; }
+
+.page-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.form-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 20px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  padding: 16px;
+}
+
 .config-card { margin-bottom: 20px; }
 .card-title { font-weight: 600; font-size: 15px; }
 .card-header-row { display: flex; align-items: center; justify-content: space-between; }
 .inline-switch { display: flex; align-items: center; gap: 10px; }
 .field-tip { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.4; }
-.form-actions { text-align: right; margin-top: 8px; }
 
 .weixin-accounts { margin-bottom: 16px; }
 .account-item {
@@ -888,4 +922,15 @@ onMounted(() => {
 .qr-dialog-content { text-align: center; }
 .qr-image img { max-width: 200px; border-radius: 8px; }
 .qr-status { margin: 16px 0; }
+
+@media (max-width: 900px) {
+  .page-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+    order: -1;
+  }
+}
 </style>

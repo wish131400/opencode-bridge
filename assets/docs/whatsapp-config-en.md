@@ -1,22 +1,28 @@
----
-name: whatsapp-config-en
-description: WhatsApp Platform Configuration Guide
-type: reference
+# WhatsApp Configuration Guide
+
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
+
 ---
 
-# WhatsApp Platform Configuration Guide
+## 1. Overview
 
 The WhatsApp adapter supports two modes:
-- **Personal Mode**: Uses baileys library (WhatsApp Web protocol)
-- **Business Mode**: Uses WhatsApp Business API
 
-## Environment Variables
+| Mode | Protocol | Description |
+|------|----------|-------------|
+| **personal** | Baileys (WhatsApp Web) | Personal account integration |
+| **business** | WhatsApp Business API | Official business API |
+
+---
+
+## 2. Environment Variables
 
 ### Common Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `WHATSAPP_ENABLED` | Yes | `false` | Enable WhatsApp adapter |
+| `WHATSAPP_ENABLED` | No | `false` | Enable WhatsApp adapter |
 | `WHATSAPP_MODE` | No | `personal` | Running mode: `personal` or `business` |
 
 ### Personal Mode Configuration
@@ -29,16 +35,18 @@ The WhatsApp adapter supports two modes:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `WHATSAPP_BUSINESS_PHONE_ID` | Yes | - | Business Phone ID |
-| `WHATSAPP_BUSINESS_ACCESS_TOKEN` | Yes | - | Business Access Token |
+| `WHATSAPP_BUSINESS_PHONE_ID` | Conditional | - | Business Phone ID |
+| `WHATSAPP_BUSINESS_ACCESS_TOKEN` | Conditional | - | Business Access Token |
 | `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN` | No | - | Webhook verify token |
 
-## Personal Mode
+---
+
+## 3. Personal Mode
 
 ### Configuration Example
 
 ```bash
-# .env file
+# .env file or Web panel
 WHATSAPP_ENABLED=true
 WHATSAPP_MODE=personal
 WHATSAPP_SESSION_PATH=/var/lib/whatsapp-session
@@ -49,36 +57,44 @@ WHATSAPP_SESSION_PATH=/var/lib/whatsapp-session
 Personal mode generates a QR code on startup. Scan with your phone to log in:
 
 1. After starting the service, check the QR code in logs
-2. Open WhatsApp on phone → Settings → Linked devices → Link a device
+2. Open WhatsApp on phone → **Settings** → **Linked devices** → **Link a device**
 3. Scan the QR code from logs
 4. Session will be saved automatically after successful login
 
 ### Features
 
-- Uses personal WhatsApp account
-- Supports private and group chats
-- No business account approval needed
-- QR code login with session persistence
+| Feature | Support |
+|---------|---------|
+| Personal WhatsApp account | ✅ |
+| Private chat | ✅ |
+| Group chat | ✅ |
+| No business approval | ✅ |
+| QR code login | ✅ |
+| Session persistence | ✅ |
 
 ### Limitations
 
-- Periodic re-scanning needed to maintain login
-- Third-party clients not officially recommended
-- Potential account risk
+| Limitation | Description |
+|------------|-------------|
+| Periodic re-scanning | Needed to maintain login |
+| Third-party client | Not officially recommended |
+| Account risk | Potential account restrictions |
 
-## Business Mode
+---
+
+## 4. Business Mode
 
 ### Prerequisites
 
 1. Have a WhatsApp Business account
 2. Create an app at [Meta for Developers](https://developers.facebook.com/)
 3. Add WhatsApp Business API product
-4. Obtain Phone ID and Access Token
+4. Obtain **Phone ID** and **Access Token**
 
 ### Configuration Example
 
 ```bash
-# .env file
+# .env file or Web panel
 WHATSAPP_ENABLED=true
 WHATSAPP_MODE=business
 WHATSAPP_BUSINESS_PHONE_ID=123456789012345
@@ -96,18 +112,22 @@ Business mode requires webhook configuration to receive messages:
 
 ### Features
 
-- Official API, stable and reliable
-- Message template support
-- Interactive button support (max 3)
-- Business account required
+| Feature | Support |
+|---------|---------|
+| Official API | ✅ Stable and reliable |
+| Message templates | ✅ Supported |
+| Interactive buttons | ✅ Max 3 buttons |
+| Business account | ✅ Required |
 
-## Message Type Support
+---
+
+## 5. Message Type Support
 
 ### Personal Mode
 
 | Message Type | Send | Receive | Notes |
 |--------------|------|---------|-------|
-| Text | ✅ | ✅ | Supported, max 4096 characters |
+| Text | ✅ | ✅ | Max 4096 characters |
 | Image | ❌ | ✅ | Receive only |
 | Video | ❌ | ✅ | Receive only |
 | Audio | ❌ | ✅ | Receive only |
@@ -120,21 +140,47 @@ Business mode requires webhook configuration to receive messages:
 
 | Message Type | Send | Receive | Notes |
 |--------------|------|---------|-------|
-| Text | ✅ | ⚠️ | Requires webhook for receive |
+| Text | ✅ | ⚠️ | Requires webhook |
 | Interactive Button | ✅ | ⚠️ | Max 3 buttons |
 
-## ChatId Format
+---
+
+## 6. ChatId Format
 
 ### Personal Mode
 
-- Private chat: `<phone>@s.whatsapp.net` (e.g., `8613800138000@s.whatsapp.net`)
-- Group chat: `<groupId>@g.us`
+| Type | Format | Example |
+|------|--------|---------|
+| Private chat | `<phone>@s.whatsapp.net` | `8613800138000@s.whatsapp.net` |
+| Group chat | `<groupId>@g.us` | `123456789@g.us` |
 
 ### Business Mode
 
-Uses plain phone number (no suffix)
+Uses plain phone number (no suffix):
 
-## Troubleshooting
+| Type | Format | Example |
+|------|--------|---------|
+| Private chat | `<phone>` | `8613800138000` |
+
+---
+
+## 7. Usage
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | View help information |
+| `/panel` | Open control panel |
+| `/model <provider:model>` | Switch model |
+| `/agent <name>` | Switch Agent |
+| `/session new` | Start new topic |
+| `/undo` | Undo last interaction |
+| `/compact` | Compress context |
+
+---
+
+## 8. Troubleshooting
 
 ### Personal Mode
 
@@ -163,9 +209,20 @@ Uses plain phone number (no suffix)
 [WhatsApp Business] mode enabled   # Business mode started
 ```
 
-## Security Recommendations
+---
 
-1. Personal mode session files contain sensitive information - store securely
-2. Business mode Access Tokens should be rotated regularly
-3. Don't expose Personal mode service on public networks
-4. Monitor abnormal login activity
+## 9. Security Recommendations
+
+1. **Personal mode**: Session files contain sensitive information - store securely
+2. **Business mode**: Access Tokens should be rotated regularly
+3. **Network**: Don't expose Personal mode service on public networks
+4. **Monitoring**: Monitor abnormal login activity
+5. **Backup**: Regularly backup session files
+
+---
+
+## 10. Related Documentation
+
+- [Commands Reference](commands-en.md) - WhatsApp command list
+- [Troubleshooting Guide](troubleshooting-en.md) - Common issues
+- [Deployment Guide](deployment-en.md) - Service operations

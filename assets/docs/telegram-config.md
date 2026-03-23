@@ -1,46 +1,81 @@
+# Telegram 配置指南
+
+本文档说明如何配置 Telegram Bot 以接入 OpenCode Bridge。
+
 ---
-name: telegram-config
-description: Telegram 平台配置指南
-type: reference
+
+## 1. 配置概览
+
+配置 Telegram Bot 需要完成以下步骤：
+
+1. 创建 Telegram Bot
+2. 获取 Bot Token
+3. 在 Bridge 中填写配置参数
+
 ---
 
-# Telegram 平台配置指南
+## 2. 创建 Telegram Bot
 
-Telegram 适配器使用 grammy 库实现，支持通过 Long Polling 模式连接 Telegram Bot API。
-
-## 功能特性
-
-- 支持私聊和群聊
-- 支持文本、图片、文档、视频、音频、语音消息
-- 支持内联按钮交互
-- 支持消息编辑和删除
-- 群聊中 @机器人 才响应
-
-## 环境变量配置
-
-| 变量名 | 必填 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `TELEGRAM_ENABLED` | 是 | `false` | 是否启用 Telegram 适配器 |
-| `TELEGRAM_BOT_TOKEN` | 是 | - | Bot Token，从 @BotFather 获取 |
-
-## 创建 Telegram Bot
-
-### 1. 获取 Bot Token
+### 步骤 1：联系 BotFather
 
 1. 在 Telegram 中搜索 **@BotFather**
 2. 发送 `/newbot` 命令
 3. 按提示设置 Bot 名称和用户名
 4. 保存返回的 Token（格式：`123456789:ABCdefGHIjklMNOpqrSTUvwxYZ`）
 
-### 2. 配置环境变量
+### 步骤 2：配置 Bot
 
-```bash
-# .env 文件
-TELEGRAM_ENABLED=true
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+可以向 @BotFather 发送以下命令配置 Bot：
+
+| 命令 | 说明 |
+|------|------|
+| `/setprivacy` | 设置群聊中 Bot 是否只能看到 @它的消息 |
+| `/setcommands` | 设置 Bot 命令列表 |
+| `/setdescription` | 设置 Bot 描述 |
+| `/setabouttext` | 设置关于文本 |
+
+---
+
+## 3. Bridge 配置
+
+在 Web 面板或 `.env` 中配置以下参数：
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `TELEGRAM_ENABLED` | ✅ | 设置为 `true` 启用 Telegram |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Telegram Bot Token |
+
+---
+
+## 4. 验证
+
+配置完成后，在 Telegram 中验证：
+
+1. 搜索你的 Bot 用户名
+2. 向机器人发送 `/start` 或 `/help`
+3. 如果配置正确，机器人应该会响应
+4. 测试其他命令如 `/panel`、`/session new`
+
+---
+
+## 5. 群聊配置
+
+在群聊中，Bot 只会响应包含 @机器人的消息：
+
+- ✅ `@mybot 你好` - 会响应
+- ❌ `你好` - 不会响应
+
+如需在群聊中正常使用，需要在 @BotFather 中设置隐私模式：
+
+```
+/setprivacy
+选择你的 Bot
+选择"Disable" - 让 Bot 可以看到所有群消息
 ```
 
-## 消息类型支持
+---
+
+## 6. 消息类型支持
 
 | 消息类型 | 发送 | 接收 | 说明 |
 |----------|------|------|------|
@@ -50,101 +85,45 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
 | 视频 | ❌ | ✅ | 仅支持接收 |
 | 音频 | ❌ | ✅ | 仅支持接收 |
 | 语音 | ❌ | ✅ | 仅支持接收 |
-| 卡片 | ⚠️ | ❌ | 使用按钮交互实现 |
+| 卡片/按钮 | ⚠️ | ❌ | 使用内联按钮交互实现 |
 
-## 群聊配置
+---
 
-在群聊中，Bot 只会响应包含 @机器人 的消息：
+## 7. 故障排查
 
-- ✅ `@mybot 你好` - 会响应
-- ❌ `你好` - 不会响应
+### 机器人无响应
 
-私聊中所有消息都会响应。
+1. 检查 `TELEGRAM_ENABLED` 是否为 `true`
+2. 检查 Bot Token 是否正确
+3. 检查网络连接
+4. 查看 Bridge 服务日志
 
-## 内联按钮
+### 群聊无响应
 
-Telegram 支持内联按钮交互：
+1. 确认消息中包含 @机器人
+2. 检查隐私模式设置
+3. 检查 Bot 在群中的权限
 
-```typescript
-// 发送带按钮的消息
-await sender.sendCard(conversationId, {
-  text: '请选择操作',
-  buttons: [
-    { text: '确认', callback_data: 'confirm' },
-    { text: '取消', callback_data: 'cancel' },
-  ]
-});
-```
+### 无法发送消息
 
-按钮点击会触发 `PlatformActionEvent`。
+1. 检查 Bot 是否被用户屏蔽
+2. 检查网络连接
+3. 查看错误日志
 
-## 文件下载
+---
 
-Telegram 适配器支持下载媒体文件：
-
-```typescript
-const result = await telegramAdapter.downloadFile(fileId);
-if (result) {
-  const { buffer, fileName, mimeType } = result;
-  // 处理文件
-}
-```
-
-## 消息管理
-
-### 编辑消息
-
-```typescript
-await sender.updateCard(messageId, {
-  text: '更新后的内容',
-  buttons: [...]
-});
-```
-
-### 删除消息
-
-```typescript
-await sender.deleteMessage(messageId);
-```
-
-## ChatId 格式
+## 8. ChatId 格式
 
 Telegram 的 ChatId 是数字格式的聊天 ID：
 
-- 私聊：用户 ID（如 `123456789`）
-- 群聊：群组 ID（如 `-1001234567890`）
+- **私聊**: 用户 ID（如 `123456789`）
+- **群聊**: 群组 ID（如 `-1001234567890`）
 
-## 故障排查
+---
 
-### 常见问题
+## 9. 安全建议
 
-| 问题 | 可能原因 | 解决方案 |
-|------|----------|----------|
-| Bot 不响应 | Token 无效 | 检查 Token 是否正确 |
-| 群聊无响应 | 未 @机器人 | 在消息中 @机器人 |
-| Long Polling 错误 | 网络问题 | 检查网络连接 |
-| 无法发送消息 | Bot 被封禁 | 检查 Bot 状态 |
-
-### 日志关键词
-
-```
-[Telegram] Long Polling 已启动  # 服务启动
-[Telegram] 已连接              # 连接成功
-[Telegram] 发送文本消息失败     # 发送失败
-[Telegram] Long Polling 运行出错 # 运行错误
-```
-
-## 权限设置
-
-在 @BotFather 中可配置：
-
-- `/setprivacy` - 设置群聊中 Bot 是否只能看到 @它的消息
-- `/setcommands` - 设置 Bot 命令列表
-- `/setdescription` - 设置 Bot 描述
-
-## 安全建议
-
-1. 不要在代码中硬编码 Token
-2. 使用环境变量存储敏感信息
-3. 定期检查 Bot 使用情况
-4. 监控异常 API 调用
+1. **Token 保护**: 不要泄露 Bot Token
+2. **权限最小化**: 只授予必要的权限
+3. **私有限制**: 如可能，限制机器人只能在特定群组使用
+4. **定期重置**: 定期重置 Bot Token

@@ -134,8 +134,6 @@ export const qqConfig = {
   get onebotHttpUrl() { return process.env.QQ_ONEBOT_HTTP_URL?.trim() || undefined; },
   get appId() { return process.env.QQ_APP_ID?.trim() || undefined; },
   get secret() { return process.env.QQ_SECRET?.trim() || undefined; },
-  get callbackUrl() { return process.env.QQ_CALLBACK_URL?.trim() || undefined; },
-  get encryptKey() { return process.env.QQ_ENCRYPT_KEY?.trim() || undefined; },
 };
 
 export const whatsappConfig = {

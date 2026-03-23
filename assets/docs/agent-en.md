@@ -1,16 +1,23 @@
 # Agent (Role) Usage Guide
 
-This document describes how to use and configure Agents (Roles) in OpenCode Bridge.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
 
 ---
 
-## 1. View and Switch Agent
+## 1. Overview
+
+Agents (also called Roles) allow you to customize the AI assistant's behavior and expertise for specific tasks.
+
+---
+
+## 2. View and Switch Agent
 
 ### Web Panel (Recommended)
 
-Use `/panel` to visually switch roles - takes effect immediately in current group.
+Use `/panel` command to visually switch agents - takes effect immediately in current session.
 
-### Command Line
+### Commands
 
 | Command | Description |
 |---------|-------------|
@@ -20,9 +27,11 @@ Use `/panel` to visually switch roles - takes effect immediately in current grou
 
 ---
 
-## 2. Custom Agent Creation
+## 3. Custom Agent Creation
 
 ### Natural Language Format
+
+Create agents using natural language:
 
 ```text
 创建角色 名称=Travel Assistant; 描述=Expert at travel planning; 类型=primary; 工具=webfetch; 提示词=Ask budget and time first, then provide three options
@@ -30,8 +39,10 @@ Use `/panel` to visually switch roles - takes effect immediately in current grou
 
 ### Slash Command Format
 
+Create agents using structured command:
+
 ```text
-/role create name=Code Reviewer; 描述=Focus on maintainability and security; 类型=subagent; 工具=read,grep; 提示词=List risks first, then give minimal change suggestions
+/role create name=Code Reviewer; description=Focus on maintainability and security; type=subagent; tools=read,grep; prompt=List risks first, then give minimal change suggestions
 ```
 
 ### Parameters
@@ -46,7 +57,7 @@ Use `/panel` to visually switch roles - takes effect immediately in current grou
 
 ---
 
-## 3. Agent Types
+## 4. Agent Types
 
 ### Primary Agent
 
@@ -56,13 +67,26 @@ Use `/panel` to visually switch roles - takes effect immediately in current grou
 
 ### Subagent
 
-- Specialized assistant
+- Specialized assistant for specific tasks
 - Limited tool access
 - Works under primary agent supervision
 
 ---
 
-## 4. Configuration Reminder
+## 5. Built-in Agents
+
+OpenCode comes with default agents:
+
+| Agent | Description |
+|-------|-------------|
+| `general` | General-purpose assistant |
+| `companion` | Conversational companion |
+
+You can switch between these or create custom agents.
+
+---
+
+## 6. Configuration Reminder
 
 If `/panel` does not immediately show the new role after configuration:
 
@@ -71,11 +95,7 @@ If `/panel` does not immediately show the new role after configuration:
 
 ---
 
-## 5. Built-in Agents
+## 7. Related Documentation
 
-OpenCode comes with default agents:
-
-- **general**: General-purpose assistant
-- **companion**: Conversational companion
-
-You can switch between these or create custom agents.
+- [Commands Reference](commands-en.md) - Command list
+- [Configuration Center](environment-en.md) - Environment variables

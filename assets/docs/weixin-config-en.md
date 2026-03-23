@@ -1,43 +1,58 @@
----
-name: weixin-config-en
-description: WeChat Personal Account Platform Configuration Guide
-type: reference
+# WeChat Personal Account Configuration Guide
+
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
+
 ---
 
-# WeChat Personal Account Configuration Guide
+## 1. Overview
 
 The WeChat personal account adapter uses HTTP long polling to receive messages, enabling integration between personal WeChat and OpenCode.
 
-## Features
+### Features
 
-- Multi-account support
-- Support for text, image, voice, video, and file messages
-- Typing indicator support
-- Automatic session expiration handling
-- Message deduplication
+| Feature | Support |
+|---------|---------|
+| Multi-account support | ✅ |
+| Text messages | ✅ |
+| Image messages | ✅ Receive only |
+| Voice messages | ✅ Receive only |
+| Video messages | ✅ Receive only |
+| File messages | ✅ Receive only |
+| Typing indicator | ✅ |
+| Session expiration handling | ✅ |
+| Message deduplication | ✅ |
 
-## Prerequisites
+---
 
-The WeChat personal account adapter requires integration with the WeChat Open Platform. You need to obtain the following:
+## 2. Prerequisites
 
-1. **ilinkBotId** - Bot account ID
-2. **botToken** - Bot token
-3. **baseUrl** - API base URL (optional)
-4. **cdnBaseUrl** - CDN base URL (optional)
+The WeChat personal account adapter requires integration with the WeChat Open Platform. You need to obtain:
 
-## Configuration Method
+| Credential | Description |
+|------------|-------------|
+| **ilinkBotId** | Bot account ID |
+| **botToken** | Bot token |
+| **baseUrl** | API base URL (optional) |
+| **cdnBaseUrl** | CDN base URL (optional) |
 
-WeChat personal account is configured via database, not environment variables. Configure account information in the `config_store` table.
+---
 
-### Account Configuration Table Structure
+## 3. Configuration Method
+
+WeChat personal account is configured via **database**, not environment variables.
+
+### Account Configuration Table
+
+Configuration is stored in the `weixin_accounts` table:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| account_id | TEXT | Unique account identifier |
-| token | TEXT | Bot token |
-| base_url | TEXT | API base URL |
-| cdn_base_url | TEXT | CDN base URL |
-| enabled | INTEGER | Enable status (1=enabled, 0=disabled) |
+| `account_id` | TEXT | Unique account identifier |
+| `token` | TEXT | Bot token |
+| `base_url` | TEXT | API base URL |
+| `cdn_base_url` | TEXT | CDN base URL |
+| `enabled` | INTEGER | Enable status (1=enabled, 0=disabled) |
 
 ### Add Account Example
 
@@ -52,7 +67,19 @@ VALUES (
 );
 ```
 
-## ChatId Format
+### Enable/Disable Account
+
+```sql
+-- Enable account
+UPDATE weixin_accounts SET enabled = 1 WHERE account_id = 'my-weixin-bot';
+
+-- Disable account
+UPDATE weixin_accounts SET enabled = 0 WHERE account_id = 'my-weixin-bot';
+```
+
+---
+
+## 4. ChatId Format
 
 WeChat personal account ChatId format:
 
@@ -60,32 +87,46 @@ WeChat personal account ChatId format:
 weixin::<accountId>::<peerUserId>
 ```
 
-- `accountId` - Bot account ID
-- `peerUserId` - Peer user ID
+| Component | Description |
+|-----------|-------------|
+| `accountId` | Bot account ID |
+| `peerUserId` | Peer user ID |
 
-## Message Type Support
+---
+
+## 5. Message Type Support
 
 | Message Type | Send | Receive | Notes |
 |--------------|------|---------|-------|
-| Text | ✅ | ✅ | Supported, Markdown auto-converted to plain text |
+| Text | ✅ | ✅ | Markdown auto-converted to plain text |
 | Image | ❌ | ✅ | Receive only |
 | Voice | ❌ | ✅ | Receive only |
 | Video | ❌ | ✅ | Receive only |
 | File | ❌ | ✅ | Receive only |
 | Card | ⚠️ | ❌ | Falls back to plain text |
 
-## Limitations
+---
 
-1. **Private chat only** - Group chat messages not supported
-2. **No message deletion** - WeChat protocol limitation
-3. **No message update** - WeChat protocol limitation
-4. **Text format restriction** - Plain text only, Markdown auto-converted
+## 6. Limitations
 
-## Session Management
+| Limitation | Description |
+|------------|-------------|
+| **Private chat only** | Group chat messages not supported |
+| **No message deletion** | WeChat protocol limitation |
+| **No message update** | WeChat protocol limitation |
+| **Text format** | Plain text only, Markdown auto-converted |
+
+---
+
+## 7. Session Management
 
 ### Session Expiration Handling
 
-When `errcode -14` is received, the session has expired. The adapter automatically pauses polling for that account.
+When `errcode -14` is received, the session has expired. The adapter automatically:
+
+1. Pauses polling for that account
+2. Logs the expiration event
+3. Waits for manual restart
 
 ### Restart Account
 
@@ -116,7 +157,9 @@ Response example:
 }
 ```
 
-## Typing Indicator
+---
+
+## 8. Typing Indicator
 
 WeChat personal account supports typing indicator:
 
@@ -124,19 +167,22 @@ WeChat personal account supports typing indicator:
 await weixinAdapter.sendTypingIndicator(chatId, TypingStatus.Typing);
 ```
 
-Status values:
-- `0` - Stop typing
-- `1` - Typing
+| Status | Value | Description |
+|--------|-------|-------------|
+| Stop typing | `0` | Stop typing indicator |
+| Typing | `1` | Show typing indicator |
 
-## Troubleshooting
+---
+
+## 9. Troubleshooting
 
 ### Common Issues
 
 | Issue | Possible Cause | Solution |
 |-------|----------------|----------|
-| Account auto-paused | Session expired (errcode -14) | Check if token is valid, re-obtain if necessary |
-| Message send failed | context_token invalid | Ensure you've received a message from the peer to get the token |
-| Not receiving messages | Account not enabled | Check if `enabled` field is 1 |
+| Account auto-paused | Session expired (errcode -14) | Check token validity, re-obtain if necessary |
+| Message send failed | context_token invalid | Ensure received message from peer to get token |
+| Not receiving messages | Account not enabled | Check `enabled` field is 1 |
 
 ### Log Keywords
 
@@ -147,9 +193,21 @@ Status values:
 [Weixin] Send text failed      # Send failed
 ```
 
-## Security Recommendations
+---
 
-1. Store tokens in encrypted database
-2. Rotate tokens regularly
-3. Limit account permissions to avoid over-authorization
-4. Monitor abnormal message activity
+## 10. Security Recommendations
+
+| Recommendation | Description |
+|----------------|-------------|
+| **Encrypted storage** | Store tokens in encrypted database |
+| **Regular rotation** | Rotate tokens regularly |
+| **Limited permissions** | Avoid over-authorization |
+| **Activity monitoring** | Monitor abnormal message activity |
+
+---
+
+## 11. Related Documentation
+
+- [Commands Reference](commands-en.md) - WeChat command list
+- [Troubleshooting Guide](troubleshooting-en.md) - Common issues
+- [Deployment Guide](deployment-en.md) - Service operations

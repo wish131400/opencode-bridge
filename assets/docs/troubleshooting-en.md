@@ -1,6 +1,30 @@
 # Troubleshooting Guide
 
-This document provides solutions for common issues with OpenCode Bridge.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
+
+---
+
+## Quick Diagnostic Flow
+
+```
+Problem Occurs
+    │
+    ▼
+1. Check service logs → logs/service.log, logs/service.err
+    │
+    ▼
+2. Check configuration → Web panel or data/config.db
+    │
+    ▼
+3. Check platform status → Bot/application status on each platform
+    │
+    ▼
+4. Check OpenCode → Running? Accessible?
+    │
+    ▼
+5. Restart service → Many issues temporarily resolved
+```
 
 ---
 
@@ -8,10 +32,10 @@ This document provides solutions for common issues with OpenCode Bridge.
 
 | Symptom | Priority Check |
 |---------|----------------|
-| No response after sending Feishu message | Check Feishu permissions; verify [Feishu Backend Configuration](feishu-config.md) |
+| No response after sending Feishu message | Check Feishu permissions; verify [Feishu Config](feishu-config.md) |
 | No response after clicking permission card | Check logs for permission response failure; confirm response is `once/always/reject` |
-| Permission/question card fails to send to group | Check `sessionId -> chatId` mapping exists |
-| Card update fails | Check message type matches; whether fallback to resend card |
+| Permission/question card fails to send to group | Check `.chat-sessions.json` for `sessionId → chatId` mapping |
+| Card update fails | Check message type matches; fallback to resend card |
 
 ---
 
@@ -54,46 +78,66 @@ This document provides solutions for common issues with OpenCode Bridge.
 
 ---
 
-## 6. OpenCode Issues
+## 6. WhatsApp Issues
+
+| Symptom | Priority Check |
+|---------|----------------|
+| Cannot generate QR code | Network issue; check network connection |
+| Disconnects immediately after login | Account restricted; wait and retry |
+| Session expired | Long inactivity; re-scan QR code to login |
+
+---
+
+## 7. WeChat Personal Account Issues
+
+| Symptom | Priority Check |
+|---------|----------------|
+| Account auto-paused | Session expired (errcode -14); check token validity |
+| Message send failed | context_token invalid; ensure received message from peer |
+| Not receiving messages | Account not enabled; check `enabled` field is 1 |
+
+---
+
+## 8. OpenCode Issues
 
 | Symptom | Priority Check |
 |---------|----------------|
 | `/compact` fails | Check OpenCode available models; try `/model <provider:model>` first |
 | `!ls` shell command fails | Check current session Agent; try `/agent general` first |
-| OpenCode connection fails | Check `OPENCODE_HOST` and `OPENCODE_PORT` configuration |
+| OpenCode connection failed | Check `OPENCODE_HOST` and `OPENCODE_PORT` configuration |
 | Authentication fails (401/403) | Check `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD` |
-| OpenCode > v1.2.15 no response via Feishu | Check `~/.config/opencode/opencode.json` for `"default_agent": "companion"` and remove it |
+| OpenCode > v1.2.15 no response | Check `~/.config/opencode/opencode.json` for `"default_agent": "companion"` and remove it |
 
 ---
 
-## 7. Reliability Issues
+## 9. Reliability Issues
 
 | Symptom | Priority Check |
 |---------|----------------|
 | Heartbeat doesn't seem to execute | Check `HEARTBEAT.md` has items marked as `- [ ]`; check `memory/heartbeat-state.json` `lastRunAt` |
-| Auto-rescue doesn't trigger | Check `OPENCODE_HOST` is loopback; `RELIABILITY_LOOPBACK_ONLY` is enabled; failure count/window reached threshold |
-| Auto-rescue rejected (manual) | Check `logs/reliability-audit.jsonl` `reason` field (common: `loopback_only_blocked`, `repair_budget_exhausted`) |
-| Backup config not found | Check `logs/reliability-audit.jsonl` `backupPath`; backup files named `.bak.<timestamp>.<sha256>` |
+| Auto-rescue doesn't trigger | Check `OPENCODE_HOST` is loopback; `RELIABILITY_LOOPBACK_ONLY` enabled; failure count/window reached threshold |
+| Auto-rescue rejected | Check `logs/reliability-audit.jsonl` `reason` field |
+| Backup config not found | Check `logs/reliability-audit.jsonl` `backupPath` |
 | Cron task doesn't execute | Check `RELIABILITY_CRON_ENABLED` is `true`; check Cron task status |
 
 ---
 
-## 8. Web Panel Issues
+## 10. Web Panel Issues
 
 | Symptom | Priority Check |
 |---------|----------------|
-| Web panel inaccessible | Check `ADMIN_PORT` configuration; check firewall; check service is started |
+| Web panel inaccessible | Check `ADMIN_PORT` configuration; check firewall; check service started |
 | Config changes not taking effect | Check if sensitive config (needs restart); view service logs |
 | Password error | Check Web panel password set correctly |
 | Config lost | Check `data/config.db` exists; check for backup files |
 
 ---
 
-## 9. Session Issues
+## 11. Session Issues
 
 | Symptom | Priority Check |
 |---------|----------------|
-| Private chat sends multiple guide messages on first chat | This is expected first-time flow (create group card + `/help` + `/panel`); subsequent chats work normally |
+| Private chat sends multiple guide messages on first chat | Expected first-time flow (create group card + `/help` + `/panel`); subsequent chats work normally |
 | `/send <path>` reports "file not found" | Confirm path is correct and absolute; Windows paths can use `\` or `/` |
 | `/send` reports "sensitive file rejected" | Built-in security blacklist blocks .env, keys, etc. |
 | File send fails with size limit | Feishu image limit 10MB, file limit 30MB; compress and retry |
@@ -101,7 +145,7 @@ This document provides solutions for common issues with OpenCode Bridge.
 
 ---
 
-## 10. Background Service Issues
+## 12. Background Service Issues
 
 | Symptom | Priority Check |
 |---------|----------------|
@@ -111,10 +155,78 @@ This document provides solutions for common issues with OpenCode Bridge.
 
 ---
 
-## 11. General Troubleshooting Steps
+## 13. General Troubleshooting Steps
 
-1. **View service logs**: `logs/service.log` and `logs/service.err`
-2. **Check configuration**: Via Web panel or `data/config.db`
-3. **Restart service**: Via Web panel or `node scripts/stop.mjs && npm run start`
-4. **Check network**: Ensure server can access platform APIs
-5. **Check permissions**: Ensure application/bot has sufficient permissions
+### 13.1 View Service Logs
+
+```bash
+# View standard output logs
+tail -f logs/service.log
+
+# View error logs
+tail -f logs/service.err
+
+# View reliability audit logs
+tail -f logs/reliability-audit.jsonl
+```
+
+### 13.2 Check Configuration
+
+Via Web panel `http://localhost:4098` or SQLite:
+
+```bash
+sqlite3 data/config.db "SELECT * FROM config_store;"
+```
+
+### 13.3 Restart Service
+
+```bash
+# Stop service
+node scripts/stop.mjs
+
+# Start service
+npm run start
+```
+
+### 13.4 Check Network
+
+```bash
+# Check OpenCode accessibility
+curl http://localhost:4096
+
+# Check platform API connectivity
+ping api.feishu.cn
+ping discord.com
+```
+
+### 13.5 Check Processes
+
+```bash
+# Check Bridge process
+ps aux | grep opencode-bridge
+
+# Check OpenCode process
+ps aux | grep opencode
+```
+
+---
+
+## 14. Get Help
+
+If above methods don't resolve the issue:
+
+1. **Check detailed logs** for error messages
+2. **Search [GitHub Issues](https://github.com/HNGM-HP/opencode-bridge/issues)** for similar problems
+3. **Submit new Issue** with:
+   - Problem description
+   - Relevant logs
+   - Configuration (hide sensitive data)
+   - Reproduction steps
+
+---
+
+## Related Documentation
+
+- [Deployment Guide](deployment-en.md) - Service deployment and operations
+- [Configuration Center](environment-en.md) - Configuration parameters
+- [Platform Configs](feishu-config-en.md) - Platform-specific configuration guides

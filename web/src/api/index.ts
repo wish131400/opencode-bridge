@@ -36,8 +36,6 @@ export interface BridgeSettings {
   QQ_ONEBOT_WS_URL?: string
   QQ_APP_ID?: string
   QQ_SECRET?: string
-  QQ_CALLBACK_URL?: string
-  QQ_ENCRYPT_KEY?: string
   // WhatsApp
   WHATSAPP_ENABLED?: string
   WHATSAPP_MODE?: string
@@ -281,6 +279,17 @@ export interface PlatformInfo {
   id: string
   name: string
   icon: string
+}
+
+export interface PlatformChat {
+  id: string
+  name: string
+  type: 'p2p' | 'group' | 'channel'
+  avatar?: string
+  memberCount?: number
+  isBound: boolean
+  boundSessionId?: string
+  boundSessionTitle?: string
 }
 
 export const weixinApi = {
@@ -577,5 +586,10 @@ export const sessionApi = {
   async getPlatforms(): Promise<PlatformInfo[]> {
     const res = await http.get<{ platforms: PlatformInfo[] }>('/sessions/platforms')
     return res.data.platforms
+  },
+
+  async getPlatformChats(platform: string): Promise<{ chats: PlatformChat[]; platform: string }> {
+    const res = await http.get<{ chats: PlatformChat[]; platform: string }>(`/sessions/platform-chats/${platform}`)
+    return res.data
   },
 }

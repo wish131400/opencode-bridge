@@ -1,6 +1,6 @@
 # OpenCode Bridge
 
-[![v2.9.5-beta](https://img.shields.io/badge/v2.9.5--beta-3178C6)]()
+[![v2.9.5](https://img.shields.io/badge/v2.9.5-3178C6)]()
 [![Node.js >= 18](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -9,100 +9,63 @@
 
 ---
 
-**Feishu / Discord / WeCom / Telegram / QQ / WhatsApp / WeChat × OpenCode Multi-Platform Bridge Service**
-
-Connect the AI coding assistant OpenCode to mainstream instant messaging platforms for cross-platform, cross-device intelligent programming collaboration.
+> **OpenCode Bridge** is an enterprise-grade AI programming collaboration bridge service that seamlessly integrates OpenCode (AI coding assistant) with mainstream instant messaging platforms, enabling cross-platform, cross-device intelligent programming collaboration.
 
 ---
 
-## Core Features
+## 📱 Supported Platforms
 
-### Multi-Platform Unified Access
+| Platform | Status | Core Features |
+|----------|--------|---------------|
+| Feishu (Lark) | ✅ Full Support | Card interaction, streaming output, permission confirmation, file transfer, recall sync |
+| Discord | ✅ Full Support | Component interaction, Embed messages, Slash commands, channel management |
+| WeCom (Enterprise WeChat) | ✅ Full Support | Text interaction, message sending/receiving |
+| Telegram | ✅ Full Support | Text interaction, Inline keyboard |
+| QQ (OneBot) | ✅ Full Support | Text interaction, group chat support |
+| WhatsApp | ✅ Full Support | Text interaction, media messages |
+| WeChat (Personal) | ✅ Full Support | QR code login, text interaction |
 
-| Platform | Status | Features |
-|----------|--------|----------|
-| Feishu (Lark) | Full Support | Card interaction, streaming output, permission confirmation, file transfer |
-| Discord | Full Support | Component interaction, Embed messages, Slash commands |
-| WeCom (WeChat Work) | Full Support | Text interaction, message sending/receiving |
-| Telegram | Full Support | Text interaction, Inline keyboard |
-| QQ (OneBot) | Full Support | Text interaction, group chat support |
-| WhatsApp | Full Support | Text interaction, media messages |
-| WeChat (Personal) | Full Support | QR code login, text interaction |
+---
 
-### Smart Session Management
+## ✨ Key Features
 
-- **Independent Sessions**: Each group/private chat binds to an independent OpenCode session
-- **Session Migration**: Support session binding, migration, renaming; context preserved across devices
-- **Project Directory**: Support multi-project directory switching, project alias configuration
-- **Session Cleanup**: Automatically clean invalid sessions to prevent resource leaks
+### 🔄 Smart Session Management
+- **Independent Session Binding**: Each group/private chat binds to an independent OpenCode session with isolated context
+- **Session Migration**: Support session binding, migration, and renaming with context preserved across devices
+- **Multi-Project Support**: Multiple project directory switching with alias configuration
+- **Auto Cleanup**: Automatic cleanup of invalid sessions to prevent resource leaks
 
-### AI Interaction Capabilities
-
+### 🤖 AI Interaction Capabilities
 - **Streaming Output**: Real-time AI response display with thinking chain support
-- **Permission Interaction**: AI permission requests confirmed within chat platform
-- **Question Answering**: AI questions answered within chat platform
-- **File Transfer**: AI can send files/screenshots to chat platform
+- **Permission Interaction**: AI permission requests confirmed within the chat platform
+- **Question Answering**: AI questions answered within the chat platform
+- **File Transfer**: AI can send files/screenshots to the chat platform
 - **Shell Passthrough**: Whitelisted commands can be executed directly in chat
 
-### Reliability Assurance
-
+### 🛡️ Reliability Assurance
 - **Heartbeat Monitoring**: Periodic OpenCode health probing
 - **Auto Rescue**: Automatic restart and recovery when OpenCode crashes
 - **Cron Tasks**: Runtime dynamic management of scheduled tasks
 - **Log Auditing**: Complete operation logs and error tracking
 
-### Web Management Panel
-
+### 🎛️ Web Management Panel
 - **Visual Configuration**: Real-time modification of all configuration parameters in browser
 - **Platform Management**: View connection status of each platform
 - **Cron Management**: Create, enable/disable, delete scheduled tasks
-- **Service Control**: View service status, remote restart
+- **Service Control**: View service status and remote restart
 
 ---
 
-## Key Characteristics
+## 🚀 Quick Start
 
-### User-Friendly
-
-- Permission confirmation, question answering, and session operations all completed within chat platform
-- No dependency on local terminal, use AI coding assistant anytime, anywhere
-
-### Collaboration-Friendly
-
-- Support binding existing sessions and migration binding
-- Context preserved when relaying across devices and groups
-- Multi-person collaboration sharing the same AI session
-
-### Stability-Friendly
-
-- Session mapping persistent storage
-- Dual-end recall consistency assurance
-- Same-rule cleanup prevents state misalignment
-
-### Operations-Friendly
-
-- Built-in deployment, upgrade, status check and background management processes
-- Support systemd resident running
-- Complete logging and monitoring system
-
-### Configuration-Friendly
-
-- Web visual configuration center
-- Real-time configuration modification (except for some sensitive configurations)
-- Configuration stored in SQLite database, supports backup and recovery
-
----
-
-## Quick Start
-
-### 1. Clone Project
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/HNGM-HP/opencode-bridge.git
 cd opencode-bridge
 ```
 
-### 2. One-Click Deploy
+### 2. One-Click Deployment
 
 **Linux/macOS:**
 ```bash
@@ -140,17 +103,17 @@ npm run dev
 
 ### 4. Configure Platform
 
-After service starts, access Web configuration panel to complete platform configuration:
+After service starts, access the Web configuration panel:
 
 ```
 http://localhost:4098
 ```
 
-On first access, you will be prompted to set an administrator password.
+You will be prompted to set an administrator password on first access.
 
 ---
 
-## Command Reference
+## 📝 Command Reference
 
 ### Feishu Commands
 
@@ -196,7 +159,7 @@ On first access, you will be prompted to set an administrator password.
 
 ---
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -232,9 +195,9 @@ On first access, you will be prompted to set an administrator password.
 
 ---
 
-## Detailed Documentation
+## 📚 Documentation
 
-### Core Documents
+### Core Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -245,19 +208,19 @@ On first access, you will be prompted to set an administrator password.
 | [Reliability](assets/docs/reliability-en.md) | Heartbeat, Cron and crash rescue configuration |
 | [Troubleshooting](assets/docs/troubleshooting-en.md) | Common issues and solutions |
 
-### Platform Configuration Documents
+### Platform Configuration Documentation
 
 | Document | Description |
 |----------|-------------|
 | [Feishu Config](assets/docs/feishu-config-en.md) | Feishu event subscription and permission configuration |
 | [Discord Config](assets/docs/discord-config-en.md) | Discord bot configuration guide |
-| [WeCom Config](assets/docs/wecom-config-en.md) | WeChat Work bot configuration guide |
+| [WeCom Config](assets/docs/wecom-config-en.md) | Enterprise WeChat bot configuration guide |
 | [Telegram Config](assets/docs/telegram-config-en.md) | Telegram Bot configuration guide |
 | [QQ Config](assets/docs/qq-config-en.md) | QQ Official/OneBot protocol configuration guide |
 | [WhatsApp Config](assets/docs/whatsapp-config-en.md) | WhatsApp Personal/Business configuration guide |
 | [WeChat Personal Config](assets/docs/weixin-config-en.md) | WeChat personal account configuration guide |
 
-### Extended Documents
+### Extended Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -269,17 +232,60 @@ On first access, you will be prompted to set an administrator password.
 
 ---
 
-## License
+## 📋 Requirements
+
+- **Node.js**: >= 18.0.0
+- **Operating System**: Linux / macOS / Windows
+- **OpenCode**: Must be installed and running
+
+---
+
+## 🔧 Configuration
+
+### Configuration Methods
+
+| Method | Description |
+|--------|-------------|
+| Web Panel (Recommended) | Access `http://localhost:4098` for visual configuration |
+| SQLite Database | Configuration stored in `data/config.db` |
+| .env File | Only stores Admin panel startup parameters |
+
+### Core Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `FEISHU_ENABLED` | `false` | Enable Feishu adapter |
+| `DISCORD_ENABLED` | `false` | Enable Discord adapter |
+| `OPENCODE_HOST` | `localhost` | OpenCode host address |
+| `OPENCODE_PORT` | `4096` | OpenCode port |
+| `ADMIN_PORT` | `4098` | Web configuration panel port |
+
+For complete configuration parameters, refer to the [Configuration Center Documentation](assets/docs/environment-en.md).
+
+---
+
+## 📄 License
 
 This project is licensed under [GNU General Public License v3.0](LICENSE)
 
 **GPL v3 means:**
-- Free to use, modify and distribute
-- Can be used for commercial purposes
-- Must open source modified versions
-- Must retain original author copyright
-- Derivative works must use GPL v3 license
+- ✅ Free to use, modify and distribute
+- ✅ Can be used for commercial purposes
+- ✅ Must open source modified versions
+- ✅ Must retain original author copyright
+- ✅ Derivative works must use GPL v3 license
 
 ---
 
+## 🌟 Contributing
+
 If this project helps you, please give it a Star!
+
+For issues or suggestions, feel free to submit an [Issue](https://github.com/HNGM-HP/opencode-bridge/issues) or [Pull Request](https://github.com/HNGM-HP/opencode-bridge/pulls).
+
+---
+
+## 📞 Support
+
+- **GitHub Issues**: [Report Issues](https://github.com/HNGM-HP/opencode-bridge/issues)
+- **Project Home**: [GitHub Repository](https://github.com/HNGM-HP/opencode-bridge)

@@ -1,6 +1,18 @@
 # Configuration Center
 
-> **Architecture Change**: Business configuration parameters have been migrated to SQLite database storage, managed through Web visual panel. The `.env` file is only used for storing Admin panel startup parameters.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
+
+---
+
+## Architecture Change
+
+Business configuration parameters have been migrated to SQLite database storage (`.env` file now only stores Admin panel startup parameters).
+
+| Storage | Purpose | Content |
+|---------|---------|---------|
+| **`.env`** | Startup Parameters | `ADMIN_PORT`, `ADMIN_PASSWORD` only |
+| **SQLite** (`data/config.db`) | Business Configuration | All platform configs, reliability settings, display controls |
 
 ---
 
@@ -8,17 +20,31 @@
 
 ### Method 1: Web Visual Panel (Recommended)
 
-After service startup, visit `http://localhost:4098` to access the configuration panel:
+After service startup, access via browser:
 
+```
+http://localhost:4098
+```
+
+**Features:**
 - Real-time modification of all configuration parameters
 - Manage Cron scheduled tasks
 - View service running status
 - Sensitive fields automatically masked
 - Platform connection status viewing
+- OpenCode management (install, start, status)
 
 ### Method 2: SQLite Database
 
-Configuration is stored in `data/config.db` database, can be viewed or modified directly through database tools.
+Configuration stored in `data/config.db` database:
+
+```bash
+# View all configuration
+sqlite3 data/config.db "SELECT * FROM config_store;"
+
+# Export configuration
+sqlite3 data/config.db ".dump" > config-backup.sql
+```
 
 ### Method 3: .env File (Startup Parameters Only)
 
@@ -32,8 +58,6 @@ The `.env` file now only stores Admin panel startup parameters:
 ---
 
 ## Business Configuration Parameters
-
-The following parameters are configured through Web panel or automatically migrated from `.env` to database on first startup.
 
 ### Basic Configuration
 
@@ -89,12 +113,12 @@ The following parameters are configured through Web panel or automatically migra
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `QQ_ENABLED` | No | `false` | Enable QQ adapter |
-| `QQ_PROTOCOL` | No | `onebot` | Protocol type: `official` (official channel bot) or `onebot` (community protocol) |
+| `QQ_PROTOCOL` | No | `onebot` | Protocol type: `official` or `onebot` |
 | `QQ_APP_ID` | Conditional | - | Official protocol: QQ Bot App ID |
 | `QQ_SECRET` | Conditional | - | Official protocol: QQ Bot Secret |
 | `QQ_CALLBACK_URL` | No | - | Official protocol: Webhook callback URL |
 | `QQ_ENCRYPT_KEY` | No | - | Official protocol: Message encryption key |
-| `QQ_ONEBOT_WS_URL` | Conditional | - | OneBot protocol: WebSocket URL (e.g., `ws://127.0.0.1:3001`) |
+| `QQ_ONEBOT_WS_URL` | Conditional | - | OneBot protocol: WebSocket URL |
 | `QQ_ONEBOT_HTTP_URL` | No | - | OneBot protocol: HTTP API URL |
 
 ---
@@ -104,8 +128,8 @@ The following parameters are configured through Web panel or automatically migra
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `WHATSAPP_ENABLED` | No | `false` | Enable WhatsApp adapter |
-| `WHATSAPP_MODE` | No | `personal` | Running mode: `personal` (personal account) or `business` (business account) |
-| `WHATSAPP_SESSION_PATH` | No | `data/whatsapp-session` | Personal mode: Session file storage path |
+| `WHATSAPP_MODE` | No | `personal` | Mode: `personal` or `business` |
+| `WHATSAPP_SESSION_PATH` | No | `data/whatsapp-session` | Personal mode: Session file path |
 | `WHATSAPP_BUSINESS_PHONE_ID` | Conditional | - | Business mode: Phone ID |
 | `WHATSAPP_BUSINESS_ACCESS_TOKEN` | Conditional | - | Business mode: Access Token |
 | `WHATSAPP_BUSINESS_WEBHOOK_VERIFY_TOKEN` | No | - | Business mode: Webhook verify token |
@@ -114,7 +138,7 @@ The following parameters are configured through Web panel or automatically migra
 
 ### WeChat Personal Account Configuration
 
-WeChat personal account is configured via database, not environment variables. See [WeChat Personal Account Configuration Guide](weixin-config-en.md).
+WeChat personal account is configured via database, not environment variables. See [WeChat Configuration Guide](weixin-config-en.md).
 
 ---
 
@@ -157,12 +181,12 @@ WeChat personal account is configured via database, not environment variables. S
 |----------|----------|---------|-------------|
 | `SHOW_THINKING_CHAIN` | No | `true` | Global default: show AI thinking chain |
 | `SHOW_TOOL_CHAIN` | No | `true` | Global default: show tool call chain |
-| `FEISHU_SHOW_THINKING_CHAIN` | No | - | Feishu-specific: override global setting |
-| `FEISHU_SHOW_TOOL_CHAIN` | No | - | Feishu-specific: override global setting |
-| `DISCORD_SHOW_THINKING_CHAIN` | No | - | Discord-specific: override global setting |
-| `DISCORD_SHOW_TOOL_CHAIN` | No | - | Discord-specific: override global setting |
-| `WECOM_SHOW_THINKING_CHAIN` | No | - | WeCom-specific: override global setting |
-| `WECOM_SHOW_TOOL_CHAIN` | No | - | WeCom-specific: override global setting |
+| `FEISHU_SHOW_THINKING_CHAIN` | No | - | Feishu-specific override |
+| `FEISHU_SHOW_TOOL_CHAIN` | No | - | Feishu-specific override |
+| `DISCORD_SHOW_THINKING_CHAIN` | No | - | Discord-specific override |
+| `DISCORD_SHOW_TOOL_CHAIN` | No | - | Discord-specific override |
+| `WECOM_SHOW_THINKING_CHAIN` | No | - | WeCom-specific override |
+| `WECOM_SHOW_TOOL_CHAIN` | No | - | WeCom-specific override |
 
 ---
 
@@ -204,7 +228,7 @@ WeChat personal account is configured via database, not environment variables. S
 | `RELIABILITY_REPAIR_BUDGET` | No | `3` | Auto-rescue budget (exhausted → manual intervention) |
 | `RELIABILITY_MODE` | No | `observe` | Reliability mode reserved field |
 | `RELIABILITY_LOOPBACK_ONLY` | No | `true` | Only allow auto-rescue for localhost |
-| `OPENCODE_CONFIG_FILE` | No | `./opencode.json` | OpenCode config file for backup and rollback during rescue |
+| `OPENCODE_CONFIG_FILE` | No | `./opencode.json` | OpenCode config file for backup/rollback |
 
 ---
 
@@ -223,13 +247,13 @@ On first startup, the system automatically:
 
 | Configuration Type | Effect After Modification |
 |--------------------|---------------------------|
-| Display control (SHOW_*) | Immediate |
-| Whitelist (ALLOWED_*) | Immediate |
-| Feishu config (FEISHU_*) | Requires service restart |
-| Discord config (DISCORD_*) | Requires service restart |
-| WeCom config (WECOM_*) | Requires service restart |
-| OpenCode connection (OPENCODE_HOST/PORT) | Requires service restart |
-| Reliability switches (RELIABILITY_*) | Requires service restart |
+| Display control (`SHOW_*`) | Immediate |
+| Whitelist (`ALLOWED_*`) | Immediate |
+| Feishu config (`FEISHU_*`) | Requires service restart |
+| Discord config (`DISCORD_*`) | Requires service restart |
+| WeCom config (`WECOM_*`) | Requires service restart |
+| OpenCode connection (`OPENCODE_HOST/PORT`) | Requires service restart |
+| Reliability switches (`RELIABILITY_*`) | Requires service restart |
 
 ---
 
@@ -264,13 +288,13 @@ If OpenCode has `OPENCODE_SERVER_PASSWORD` enabled, the bridge must also configu
 
 ### ALLOWED_USERS
 
-- Not configured or empty: No whitelist; lifecycle cleanup only auto-dissolves groups when member count is `0`
-- Configured: Whitelist protection enabled; groups auto-dissolve when members insufficient and no member/owner in whitelist
+- **Not configured or empty**: No whitelist; lifecycle cleanup only auto-dissolves groups when member count is `0`
+- **Configured**: Whitelist protection enabled; groups auto-dissolve when members insufficient and no member/owner in whitelist
 
 ### ALLOWED_DIRECTORIES
 
-- Not configured or empty: Users cannot customize paths via `/session new <path>`; only default directory, project aliases, or known project list selection allowed
-- Configured: User-input paths must fall under allowed root directories (including subdirectories) after normalization and realpath resolution, otherwise rejected
+- **Not configured or empty**: Users cannot customize paths via `/session new <path>`; only default directory, project aliases, or known project list selection allowed
+- **Configured**: User-input paths must fall under allowed root directories (including subdirectories) after normalization and realpath resolution, otherwise rejected
 - Multiple root directories separated by comma, e.g., `ALLOWED_DIRECTORIES=/home/user/projects,/opt/repos`
 
 ### PROJECT_ALIASES
@@ -278,3 +302,11 @@ If OpenCode has `OPENCODE_SERVER_PASSWORD` enabled, the bridge must also configu
 - JSON format mapping short names to absolute paths, e.g., `{"frontend":"/home/user/frontend"}`
 - Users can create sessions via `/session new frontend` without remembering full paths
 - Alias paths are also constrained by `ALLOWED_DIRECTORIES`
+
+---
+
+## Related Documentation
+
+- [Deployment Guide](deployment-en.md) - Deployment and operations
+- [Reliability Guide](reliability-en.md) - Heartbeat, Cron, rescue configuration
+- [Troubleshooting Guide](troubleshooting-en.md) - Common configuration issues

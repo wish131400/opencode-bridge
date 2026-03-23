@@ -1,14 +1,17 @@
 # OpenCode SDK Integration Guide
 
-This document describes the SDK integration in `src/opencode/client.ts`.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
 
 ---
 
 ## 1. Integration Principles
 
-- **Bridge stability first**: Unified error handling, logging, and retry strategy
-- **Unified interface**: Sessions, messages, permissions, and questions all exposed through `OpencodeClientWrapper`
-- **Abstraction**: Business layer never calls underlying SDK directly
+| Principle | Description |
+|-----------|-------------|
+| **Bridge stability first** | Unified error handling, logging, and retry strategy |
+| **Unified interface** | Sessions, messages, permissions, and questions all exposed through `OpencodeClientWrapper` |
+| **Abstraction** | Business layer never calls underlying SDK directly |
 
 ---
 
@@ -184,3 +187,11 @@ await opencodeClient.replyQuestion(sessionId, requestId, answers);
 - Keep bridge wrapper stable
 - Avoid business layer coupling to raw SDK fields
 - Add regression tests for any permission/directory changes
+
+---
+
+## 9. Related Documentation
+
+- [Architecture](architecture-en.md) - OpenCode integration layer
+- [Implementation Details](implementation-en.md) - Key implementation patterns
+- [Troubleshooting Guide](troubleshooting-en.md) - Common SDK issues

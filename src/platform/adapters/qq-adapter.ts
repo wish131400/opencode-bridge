@@ -7,8 +7,6 @@
  */
 
 import WebSocket from 'ws';
-import http from 'node:http';
-import crypto from 'node:crypto';
 import axios from 'axios';
 import type {
   PlatformAdapter,
@@ -23,6 +21,31 @@ import { chatSessionStore } from '../../store/chat-session.js';
 const QQ_MESSAGE_LIMIT = 3000;
 const QQ_API_BASE = 'https://api.sgroup.qq.com';
 const QQ_OAUTH_BASE = 'https://bots.qq.com/app/getAppAccessToken';
+const QQ_GATEWAY_URL = 'https://api.sgroup.qq.com/gateway/bot';
+
+// WebSocket OpCode
+const OpCode = {
+  DISPATCH: 0,
+  HEARTBEAT: 1,
+  IDENTIFY: 2,
+  RESUME: 6,
+  RECONNECT: 7,
+  HELLO: 10,
+  HEARTBEAT_ACK: 11,
+} as const;
+
+// Intent 位掩码
+const Intents = {
+  GUILDS: 1 << 0,
+  GUILD_MEMBERS: 1 << 1,
+  DIRECT_MESSAGE: 1 << 12,
+  GROUP_AND_C2C: 1 << 25,
+  AUDIO_ACTION: 1 << 29,
+  AT_MESSAGES: 1 << 30,
+};
+
+// 完整权限（群聊 + 私信 + 频道）
+const FULL_INTENTS = Intents.AT_MESSAGES | Intents.DIRECT_MESSAGE | Intents.GROUP_AND_C2C;
 
 // ──────────────────────────────────────────────
 // 类型定义
@@ -53,24 +76,6 @@ type OneBotAttachmentData = {
   filename?: string;   // 文件名
   size?: number;       // 文件大小
   file_size?: number;  // 文件大小（备用字段）
-};
-
-type QQMessage = {
-  id: string;
-  chat_type: 'group' | 'c2c';
-  group_openid?: string;
-  openid?: string;
-  content: string;
-  author: {
-    user_openid?: string;
-    member_openid?: string;
-  };
-  attachments?: Array<{
-    content_type?: string;
-    filename?: string;
-    url?: string;
-    size?: number;
-  }>;
 };
 
 type QQCardPayload = {
@@ -124,20 +129,61 @@ function splitText(text: string, limit: number): string[] {
 }
 
 // ──────────────────────────────────────────────
-// QQ 官方 API 客户端
+// QQ 官方 API 客户端 (WebSocket 方式)
 // ──────────────────────────────────────────────
 
+type QQWSMessage = {
+  op: number;
+  s?: number;
+  t?: string;
+  d?: unknown;
+};
+
+type QQGatewayResponse = {
+  url: string;
+  shards?: number;
+  session_start_limit?: {
+    total: number;
+    remaining: number;
+    reset_after: number;
+  };
+};
+
+type QQDispatchData = {
+  id?: string;
+  content?: string;
+  timestamp?: string;
+  author?: {
+    id?: string;
+    user_openid?: string;
+    member_openid?: string;
+  };
+  group_id?: string;
+  channel_id?: string;
+  guild_id?: string;
+  attachments?: Array<{
+    content_type?: string;
+    filename?: string;
+    url?: string;
+    size?: number;
+  }>;
+};
+
 class QQOfficialClient {
+  private ws: WebSocket | null = null;
   private accessToken: string | null = null;
   private accessTokenExpiresAt: number = 0;
   private accessTokenPromise: Promise<string> | null = null;
-  private httpServer: http.Server | null = null;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private heartbeatIntervalMs: number = 41250;
+  private seq: number = 0;
+  private sessionId: string | null = null;
+  private isReconnect = false;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly appId: string,
     private readonly secret: string,
-    private readonly callbackUrl?: string,
-    private readonly encryptKey?: string,
   ) {}
 
   private async fetchAccessToken(): Promise<string> {
@@ -179,6 +225,281 @@ class QQOfficialClient {
     return await this.accessTokenPromise;
   }
 
+  async connect(
+    onMessage: (chatId: string, text: string, messageId: string, senderId: string, attachments?: PlatformAttachment[]) => Promise<void>,
+  ): Promise<void> {
+    try {
+      const accessToken = await this.getValidAccessToken();
+
+      // 获取 WebSocket Gateway URL
+      console.log('[QQ Official] 获取 WebSocket Gateway...');
+      const gatewayResponse = await axios.get<QQGatewayResponse>(QQ_GATEWAY_URL, {
+        headers: {
+          'Authorization': `QQBot ${accessToken}`,
+        },
+        timeout: 10000,
+      });
+
+      const wsUrl = gatewayResponse.data.url;
+      if (!wsUrl) {
+        throw new Error('无法获取 WebSocket Gateway URL');
+      }
+
+      console.log(`[QQ Official] 连接 WebSocket: ${wsUrl}`);
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.on('open', () => {
+        console.log('[QQ Official] WebSocket 已连接');
+        this.clearReconnectTimer();
+      });
+
+      this.ws.on('message', async (data) => {
+        try {
+          const msg: QQWSMessage = JSON.parse(data.toString());
+          await this.handleWSMessage(msg, onMessage);
+        } catch (error) {
+          console.error('[QQ Official] 解析消息失败:', error);
+        }
+      });
+
+      this.ws.on('close', (code, reason) => {
+        console.log(`[QQ Official] WebSocket 断开: code=${code}, reason=${reason}`);
+        this.stopHeartbeat();
+        this.scheduleReconnect(onMessage);
+      });
+
+      this.ws.on('error', (error) => {
+        console.error('[QQ Official] WebSocket 错误:', error);
+      });
+    } catch (error) {
+      console.error('[QQ Official] 连接失败:', error);
+      this.scheduleReconnect(onMessage);
+    }
+  }
+
+  private async handleWSMessage(
+    msg: QQWSMessage,
+    onMessage: (chatId: string, text: string, messageId: string, senderId: string, attachments?: PlatformAttachment[]) => Promise<void>,
+  ): Promise<void> {
+    // 更新序列号
+    if (msg.s !== undefined) {
+      this.seq = msg.s;
+    }
+
+    // HELLO - 连接成功，开始鉴权
+    if (msg.op === OpCode.HELLO && msg.d) {
+      const d = msg.d as { heartbeat_interval?: number };
+      if (d.heartbeat_interval) {
+        this.heartbeatIntervalMs = d.heartbeat_interval;
+      }
+      console.log(`[QQ Official] 收到 HELLO，心跳间隔 ${this.heartbeatIntervalMs}ms`);
+
+      if (this.isReconnect && this.sessionId) {
+        this.sendResume();
+      } else {
+        this.sendIdentify();
+      }
+      return;
+    }
+
+    // HEARTBEAT_ACK - 心跳响应
+    if (msg.op === OpCode.HEARTBEAT_ACK) {
+      this.startHeartbeat();
+      return;
+    }
+
+    // RECONNECT - 需要重连
+    if (msg.op === OpCode.RECONNECT) {
+      console.log('[QQ Official] 收到 RECONNECT，准备重连');
+      this.isReconnect = true;
+      this.ws?.close();
+      return;
+    }
+
+    // DISPATCH - 事件推送
+    if (msg.op === OpCode.DISPATCH && msg.t) {
+      await this.handleDispatch(msg.t, msg.d as QQDispatchData, onMessage);
+      return;
+    }
+
+    // READY - 鉴权成功
+    if (msg.t === 'READY' && msg.d) {
+      const d = msg.d as { session_id?: string };
+      this.sessionId = d.session_id || null;
+      console.log('[QQ Official] 鉴权成功，session_id:', this.sessionId);
+      this.sendHeartbeat();
+      return;
+    }
+
+    // RESUMED - 重连成功
+    if (msg.t === 'RESUMED') {
+      console.log('[QQ Official] 重连成功');
+      this.isReconnect = false;
+      return;
+    }
+  }
+
+  private sendIdentify(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.accessToken) {
+      console.error('[QQ Official] 没有有效的 accessToken，无法鉴权');
+      return;
+    }
+
+    // WebSocket 鉴权使用 QQBot {accessToken} 格式
+    const token = `QQBot ${this.accessToken}`;
+
+    const payload = {
+      op: OpCode.IDENTIFY,
+      d: {
+        token,
+        intents: FULL_INTENTS,
+        shard: [0, 1],
+      },
+    };
+
+    console.log('[QQ Official] 发送鉴权请求，intents:', FULL_INTENTS);
+    this.ws.send(JSON.stringify(payload));
+  }
+
+  private sendResume(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.accessToken) {
+      console.error('[QQ Official] 没有有效的 accessToken，无法重连');
+      return;
+    }
+
+    const token = `QQBot ${this.accessToken}`;
+
+    const payload = {
+      op: OpCode.RESUME,
+      d: {
+        token,
+        session_id: this.sessionId,
+        seq: this.seq,
+      },
+    };
+
+    console.log('[QQ Official] 发送 RESUME 请求');
+    this.ws.send(JSON.stringify(payload));
+  }
+
+  private sendHeartbeat(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    const payload = {
+      op: OpCode.HEARTBEAT,
+      d: this.seq,
+    };
+
+    this.ws.send(JSON.stringify(payload));
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      this.sendHeartbeat();
+    }, this.heartbeatIntervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  private scheduleReconnect(
+    onMessage: (chatId: string, text: string, messageId: string, senderId: string, attachments?: PlatformAttachment[]) => Promise<void>,
+  ): void {
+    if (this.reconnectTimer) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.isReconnect = true;
+      this.connect(onMessage);
+    }, 5000);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private async handleDispatch(
+    eventType: string,
+    data: QQDispatchData,
+    onMessage: (chatId: string, text: string, messageId: string, senderId: string, attachments?: PlatformAttachment[]) => Promise<void>,
+  ): Promise<void> {
+    // 群聊 @ 消息
+    if (eventType === 'AT_MESSAGE_CREATE' || eventType === 'GROUP_AT_MESSAGE_CREATE') {
+      const chatId = `group_${data.group_id || data.channel_id || ''}`;
+      const messageId = data.id || '';
+      const senderId = data.author?.member_openid || data.author?.id || '';
+      const content = data.content || '';
+
+      // 提取附件
+      const attachments = this.extractAttachments(data);
+
+      if (content || attachments.length > 0) {
+        console.log(`[QQ Official] 收到群消息: chatId=${chatId}, sender=${senderId}`);
+        await onMessage(chatId, content, messageId, senderId, attachments.length > 0 ? attachments : undefined);
+      }
+      return;
+    }
+
+    // 私聊消息
+    if (eventType === 'DIRECT_MESSAGE_CREATE' || eventType === 'C2C_MESSAGE_CREATE') {
+      const chatId = `c2c_${data.author?.user_openid || data.author?.id || ''}`;
+      const messageId = data.id || '';
+      const senderId = data.author?.user_openid || data.author?.id || '';
+      const content = data.content || '';
+
+      // 提取附件
+      const attachments = this.extractAttachments(data);
+
+      if (content || attachments.length > 0) {
+        console.log(`[QQ Official] 收到私聊消息: chatId=${chatId}, sender=${senderId}`);
+        await onMessage(chatId, content, messageId, senderId, attachments.length > 0 ? attachments : undefined);
+      }
+      return;
+    }
+
+    // 其他事件类型记录日志
+    console.log(`[QQ Official] 收到事件: ${eventType}`);
+  }
+
+  private extractAttachments(data: QQDispatchData): PlatformAttachment[] {
+    const attachments: PlatformAttachment[] = [];
+
+    if (!data.attachments || data.attachments.length === 0) {
+      return attachments;
+    }
+
+    for (const att of data.attachments) {
+      const contentType = att.content_type || '';
+      const url = att.url || '';
+
+      if (!url) continue;
+
+      let type: 'image' | 'file' = 'file';
+      if (contentType.startsWith('image/')) {
+        type = 'image';
+      }
+
+      attachments.push({
+        type,
+        fileKey: url,
+        fileName: att.filename,
+        fileType: contentType,
+        fileSize: att.size,
+      });
+    }
+
+    return attachments;
+  }
+
   async sendMessage(chatId: string, text: string, msgId?: string): Promise<string | null> {
     try {
       const content = removeMarkdownFormatting(text);
@@ -214,160 +535,13 @@ class QQOfficialClient {
     }
   }
 
-  async startWebhook(
-    onMessage: (chatId: string, text: string, messageId: string, senderId: string, attachments?: PlatformAttachment[]) => Promise<void>,
-  ): Promise<void> {
-    const port = this.callbackUrl ? this.extractPort(this.callbackUrl) : 8080;
-
-    this.httpServer = http.createServer(async (req, res) => {
-      if (req.method !== 'POST') {
-        res.writeHead(405);
-        res.end();
-        return;
-      }
-
-      const chunks: Buffer[] = [];
-      req.on('data', chunk => chunks.push(chunk));
-      req.on('end', async () => {
-        try {
-          const rawBody = Buffer.concat(chunks).toString('utf8');
-          if (!rawBody) {
-            res.end();
-            return;
-          }
-
-          let body: Record<string, unknown> = JSON.parse(rawBody);
-
-          // 处理加密消息
-          const encrypted = typeof body.encrypt === 'string' ? body.encrypt : '';
-          if (encrypted && this.encryptKey) {
-            const decrypted = this.decryptEvent(encrypted, this.encryptKey);
-            body = JSON.parse(decrypted);
-          }
-
-          // 回调验证
-          if (body.op === 13) {
-            const validationData = typeof body.d === 'string' ? JSON.parse(body.d) : body.d;
-            const plainToken = validationData?.plain_token || '';
-            const eventTs = validationData?.event_ts || '';
-
-            const signature = this.validateCallbackEd25519(plainToken, eventTs);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ plain_token: plainToken, signature }));
-            return;
-          }
-
-          // 处理消息事件
-          if (body.op === 0 && body.d) {
-            const eventType = body.t as string;
-            if (eventType === 'C2C_MESSAGE_CREATE' || eventType === 'GROUP_AT_MESSAGE_CREATE') {
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ code: 0 }));
-
-              const msg = body.d as QQMessage;
-              const chatId = eventType === 'GROUP_AT_MESSAGE_CREATE'
-                ? `group_${msg.group_openid || ''}`
-                : `c2c_${msg.author.user_openid || ''}`;
-              const messageId = msg.id;
-              const senderId = msg.chat_type === 'group'
-                ? msg.author?.member_openid || ''
-                : msg.author?.user_openid || '';
-              const content = msg.content || '';
-
-              // 提取附件
-              const attachments = this.extractOfficialAttachments(msg);
-
-              if (content || attachments.length > 0) {
-                console.log(`[QQ Official] 收到消息: chatId=${chatId}, sender=${senderId}, attachments=${attachments.length}`);
-                await onMessage(chatId, content, messageId, senderId, attachments.length > 0 ? attachments : undefined);
-              }
-              return;
-            }
-          }
-
-          res.writeHead(200);
-          res.end('OK');
-        } catch (error) {
-          console.error('[QQ Official] Webhook 处理错误:', error);
-          if (!res.headersSent) {
-            res.writeHead(500);
-            res.end();
-          }
-        }
-      });
-    });
-
-    this.httpServer.listen(port, () => {
-      console.log(`[QQ Official] Webhook 服务已启动，端口 ${port}`);
-    });
-  }
-
-  async stop(): Promise<void> {
-    if (this.httpServer) {
-      this.httpServer.close();
-      this.httpServer = null;
+  async disconnect(): Promise<void> {
+    this.stopHeartbeat();
+    this.clearReconnectTimer();
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
     }
-  }
-
-  private extractPort(url: string): number {
-    try {
-      const parsed = new URL(url);
-      return parsed.port ? parseInt(parsed.port, 10) : 80;
-    } catch {
-      return 8080;
-    }
-  }
-
-  private decryptEvent(encrypted: string, encryptKey: string): string {
-    const key = crypto.createHash('sha256').update(encryptKey).digest();
-    const encryptedBuffer = Buffer.from(encrypted, 'base64');
-    const iv = encryptedBuffer.subarray(0, 16);
-    const ciphertext = encryptedBuffer.subarray(16);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(ciphertext, undefined, 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  }
-
-  private validateCallbackEd25519(plainToken: string, eventTs: string): string {
-    // 简化实现，生产环境应使用 @noble/ed25519 或 tweetnacl
-    const message = eventTs + plainToken;
-    const keyMaterial = crypto.createHmac('sha256', this.secret).digest();
-    return crypto.createHmac('sha256', keyMaterial).update(Buffer.from(message, 'utf8')).digest('hex');
-  }
-
-  /**
-   * 从 QQ 官方消息中提取附件
-   */
-  private extractOfficialAttachments(msg: QQMessage): PlatformAttachment[] {
-    const attachments: PlatformAttachment[] = [];
-
-    if (!msg.attachments || msg.attachments.length === 0) {
-      return attachments;
-    }
-
-    for (const att of msg.attachments) {
-      const contentType = att.content_type || '';
-      const url = att.url || '';
-
-      if (!url) continue;
-
-      // 判断附件类型
-      let type: 'image' | 'file' = 'file';
-      if (contentType.startsWith('image/')) {
-        type = 'image';
-      }
-
-      attachments.push({
-        type,
-        fileKey: url,
-        fileName: att.filename,
-        fileType: contentType,
-        fileSize: att.size,
-      });
-    }
-
-    return attachments;
   }
 }
 
@@ -769,16 +943,16 @@ export class QQAdapter implements PlatformAdapter {
   }
 
   private async startOfficialProtocol(): Promise<void> {
-    const { appId, secret, callbackUrl, encryptKey } = qqConfig;
+    const { appId, secret } = qqConfig;
 
     if (!appId || !secret) {
       console.warn('[QQ Official] 缺少 QQ_APP_ID 或 QQ_SECRET，适配器将保持不活跃状态');
       return;
     }
 
-    this.officialClient = new QQOfficialClient(appId, secret, callbackUrl, encryptKey);
+    this.officialClient = new QQOfficialClient(appId, secret);
 
-    await this.officialClient.startWebhook(async (chatId, text, messageId, senderId, attachments) => {
+    await this.officialClient.connect(async (chatId, text, messageId, senderId, attachments) => {
       const event: PlatformMessageEvent = {
         platform: 'qq',
         conversationId: chatId,
@@ -834,7 +1008,7 @@ export class QQAdapter implements PlatformAdapter {
 
   stop(): void {
     if (this.officialClient) {
-      this.officialClient.stop();
+      this.officialClient.disconnect();
       this.officialClient = null;
     }
     if (this.onebotClient) {

@@ -1,6 +1,6 @@
 # OpenCode Bridge
 
-[![v2.9.5-beta](https://img.shields.io/badge/v2.9.5--beta-3178C6)]()
+[![v2.9.5](https://img.shields.io/badge/v2.9.5-3178C6)]()
 [![Node.js >= 18](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -9,50 +9,46 @@
 
 ---
 
-**飞书 / Discord / 企业微信 / Telegram / QQ / WhatsApp / 个人微信 × OpenCode 多平台桥接服务**
-
-将 AI 编程助手 OpenCode 接入主流即时通讯平台，实现跨平台、跨设备的智能编程协作体验。
+> **OpenCode Bridge** 是一款企业级 AI 编程协作桥接服务，将 OpenCode（AI 编程助手）无缝接入主流即时通讯平台，实现跨平台、跨设备的智能编程协作体验。
 
 ---
 
-## 核心功能
+## 📱 支持平台
 
-### 多平台统一接入
+| 平台 | 状态 | 核心特性 |
+|------|------|----------|
+| 飞书 (Lark) | ✅ 完整支持 | 卡片交互、流式输出、权限确认、文件传输、撤回同步 |
+| Discord | ✅ 完整支持 | 组件交互、Embed 消息、Slash 命令、频道管理 |
+| 企业微信 (WeCom) | ✅ 完整支持 | 文本交互、消息收发 |
+| Telegram | ✅ 完整支持 | 文本交互、Inline 键盘 |
+| QQ (OneBot) | ✅ 完整支持 | 文本交互、群聊支持 |
+| WhatsApp | ✅ 完整支持 | 文本交互、媒体消息 |
+| 个人微信 | ✅ 完整支持 | 扫码登录、文本交互 |
 
-| 平台 | 状态 | 特性 |
-|------|------|------|
-| 飞书 (Lark) | 完整支持 | 卡片交互、流式输出、权限确认、文件传输 |
-| Discord | 完整支持 | 组件交互、Embed 消息、Slash 命令 |
-| 企业微信 (WeCom) | 完整支持 | 文本交互、消息收发 |
-| Telegram | 完整支持 | 文本交互、Inline 键盘 |
-| QQ (OneBot) | 完整支持 | 文本交互、群聊支持 |
-| WhatsApp | 完整支持 | 文本交互、媒体消息 |
-| 个人微信 | 完整支持 | 扫码登录、文本交互 |
+---
 
-### 智能会话管理
+## ✨ 核心特性
 
-- **独立会话**：每个群聊/私聊独立绑定 OpenCode 会话，互不干扰
+### 🔄 智能会话管理
+- **独立会话绑定**：每个群聊/私聊独立绑定 OpenCode 会话，上下文互不干扰
 - **会话迁移**：支持会话绑定、迁移、重命名，跨设备接力不断裂
-- **项目目录**：支持多项目目录切换，项目别名配置
-- **会话清理**：自动清理无效会话，防止资源泄漏
+- **多项目支持**：支持多项目目录切换，项目别名配置
+- **自动清理**：自动清理无效会话，防止资源泄漏
 
-### AI 交互能力
-
+### 🤖 AI 交互能力
 - **流式输出**：实时显示 AI 响应，支持思维链展示
 - **权限交互**：AI 权限请求在聊天平台内完成确认
 - **问题回答**：AI 提问在聊天平台内完成作答
 - **文件传输**：AI 可将文件/截图发送到聊天平台
 - **Shell 透传**：白名单命令可直接在聊天中执行
 
-### 可靠性保障
-
+### 🛡️ 可靠性保障
 - **心跳监控**：定时探测 OpenCode 健康状态
 - **自动救援**：OpenCode 宕机时自动重启恢复
 - **Cron 任务**：支持运行时动态管理定时任务
 - **日志审计**：完整的操作日志和错误追踪
 
-### Web 管理面板
-
+### 🎛️ Web 管理面板
 - **可视化配置**：浏览器实时修改所有配置参数
 - **平台管理**：查看各平台连接状态
 - **Cron 管理**：创建、启用/禁用、删除定时任务
@@ -60,40 +56,7 @@
 
 ---
 
-## 核心特点
-
-### 对使用者友好
-
-- 权限确认、问题作答、会话操作都在聊天平台内完成
-- 不强依赖本地终端，随时随地使用 AI 编程助手
-
-### 对协作友好
-
-- 支持绑定已有会话与迁移绑定
-- 跨设备、跨群接力时上下文不断裂
-- 多人协作共享同一 AI 会话
-
-### 对稳定性友好
-
-- 会话映射持久化存储
-- 双端撤回一致性保障
-- 同规则清理避免状态错位
-
-### 对运维友好
-
-- 内置部署、升级、状态检查与后台管理流程
-- 支持 systemd 常驻运行
-- 完整的日志和监控体系
-
-### 对配置友好
-
-- Web 可视化配置中心
-- 实时修改配置（部分敏感配置除外）
-- 配置存储于 SQLite 数据库，支持备份恢复
-
----
-
-## 快速开始
+## 🚀 快速开始
 
 ### 1. 克隆项目
 
@@ -150,7 +113,7 @@ http://localhost:4098
 
 ---
 
-## 命令速查
+## 📝 命令速查
 
 ### 飞书命令
 
@@ -168,7 +131,7 @@ http://localhost:4098
 | `/project list` | 列出可用项目 |
 | `/send <路径>` | 发送文件到群聊 |
 | `/cron ...` | 管理 Cron 任务 |
-| `!<shell命令>` | 透传 Shell 命令 |
+| `!<shell 命令>` | 透传 Shell 命令 |
 
 ### Discord 命令
 
@@ -196,12 +159,12 @@ http://localhost:4098
 
 ---
 
-## 架构概览
+## 🏗️ 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      平台适配层                              │
-│  Feishu │ Discord │ WeCom │ Telegram │ QQ │ WhatsApp │ Weixin │
+│  飞书 │ Discord │ 企业微信 │ Telegram │ QQ │ WhatsApp │ 微信  │
 └────┬────────┬────────┬────────┬────────┬────────┬──────────┘
      │        │        │        │        │        │
      └────────┴────────┴────────┴────────┴────────┘
@@ -232,7 +195,7 @@ http://localhost:4098
 
 ---
 
-## 详细文档
+## 📚 文档导航
 
 ### 核心文档
 
@@ -269,17 +232,60 @@ http://localhost:4098
 
 ---
 
-## 许可证
+## 📋 环境要求
+
+- **Node.js**: >= 18.0.0
+- **操作系统**: Linux / macOS / Windows
+- **OpenCode**: 需要安装并运行
+
+---
+
+## 🔧 配置说明
+
+### 配置管理方式
+
+| 方式 | 说明 |
+|------|------|
+| Web 面板（推荐） | 访问 `http://localhost:4098` 可视化配置 |
+| SQLite 数据库 | 配置存储在 `data/config.db` |
+| .env 文件 | 仅存储 Admin 面板启动参数 |
+
+### 核心配置项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `FEISHU_ENABLED` | `false` | 是否启用飞书适配器 |
+| `DISCORD_ENABLED` | `false` | 是否启用 Discord 适配器 |
+| `OPENCODE_HOST` | `localhost` | OpenCode 地址 |
+| `OPENCODE_PORT` | `4096` | OpenCode 端口 |
+| `ADMIN_PORT` | `4098` | Web 配置面板监听端口 |
+
+完整配置参数请参考 [配置中心文档](assets/docs/environment.md)。
+
+---
+
+## 📄 许可证
 
 本项目采用 [GNU General Public License v3.0](LICENSE)
 
 **GPL v3 意味着：**
-- 可自由使用、修改和分发
-- 可用于商业目的
-- 必须开源修改版本
-- 必须保留原作者版权
-- 衍生作品必须使用 GPL v3 协议
+- ✅ 可自由使用、修改和分发
+- ✅ 可用于商业目的
+- ✅ 必须开源修改版本
+- ✅ 必须保留原作者版权
+- ✅ 衍生作品必须使用 GPL v3 协议
 
 ---
 
+## 🌟 贡献与反馈
+
 如果这个项目对你有帮助，请给个 Star！
+
+遇到问题或有改进建议，欢迎提交 [Issue](https://github.com/HNGM-HP/opencode-bridge/issues) 或 [Pull Request](https://github.com/HNGM-HP/opencode-bridge/pulls)。
+
+---
+
+## 📞 技术支持
+
+- **GitHub Issues**: [问题反馈](https://github.com/HNGM-HP/opencode-bridge/issues)
+- **项目主页**: [GitHub Repository](https://github.com/HNGM-HP/opencode-bridge)

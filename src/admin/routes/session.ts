@@ -8,6 +8,21 @@ import express from 'express';
 import { chatSessionStore, type ChatSessionData, type SessionBindingOptions } from '../../store/chat-session.js';
 import { opencodeClient } from '../../opencode/client.js';
 import type { Session } from '@opencode-ai/sdk';
+import { feishuClient } from '../../feishu/client.js';
+import { discordAdapter } from '../../platform/adapters/discord-adapter.js';
+import { telegramAdapter } from '../../platform/adapters/telegram-adapter.js';
+import { qqAdapter } from '../../platform/adapters/qq-adapter.js';
+
+export interface PlatformChat {
+  id: string;
+  name: string;
+  type: 'p2p' | 'group' | 'channel';
+  avatar?: string;
+  memberCount?: number;
+  isBound: boolean;
+  boundSessionId?: string;
+  boundSessionTitle?: string;
+}
 
 export interface SessionBindingItem {
   platform: string;
@@ -485,5 +500,192 @@ export function createSessionRoutes(): express.Router {
     res.json({ platforms });
   });
 
+  // ── GET /api/sessions/platform-chats/:platform - 获取指定平台的聊天列表
+  router.get('/platform-chats/:platform', async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const chats: PlatformChat[] = [];
+
+      // 获取该平台已有的绑定
+      const bindings = chatSessionStore.getConversationBindings();
+      const platformBindings = bindings.filter(b => b.platform === platform);
+      const bindingMap = new Map(platformBindings.map(b => [b.conversationId, b.session]));
+
+      switch (platform) {
+        case 'feishu':
+          await fetchFeishuChats(chats, bindingMap);
+          break;
+        case 'discord':
+          await fetchDiscordChats(chats, bindingMap);
+          break;
+        case 'telegram':
+          await fetchTelegramChats(chats, bindingMap);
+          break;
+        case 'qq':
+          await fetchQQChats(chats, bindingMap);
+          break;
+        default:
+          // 对于不支持的平台，返回已绑定的会话
+          for (const [conversationId, session] of bindingMap) {
+            chats.push({
+              id: conversationId,
+              name: session.title || conversationId,
+              type: session.chatType || 'group',
+              isBound: true,
+              boundSessionId: session.sessionId,
+              boundSessionTitle: session.title,
+            });
+          }
+      }
+
+      res.json({ chats, platform });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[Session API] 获取平台聊天列表失败:`, message);
+      res.status(500).json({ error: message, chats: [] });
+    }
+  });
+
   return router;
+}
+
+// ── 平台聊天获取函数
+
+async function fetchFeishuChats(chats: PlatformChat[], bindingMap: Map<string, ChatSessionData>): Promise<void> {
+  try {
+    const chatIds = await feishuClient.getUserChats();
+    console.log(`[Session API] 获取飞书群列表: ${chatIds.length} 个`);
+
+    for (const chatId of chatIds) {
+      const binding = bindingMap.get(chatId);
+      const chatInfo = await feishuClient.getChat(chatId).catch(() => null);
+
+      chats.push({
+        id: chatId,
+        name: chatInfo?.name || chatId,
+        type: 'group',
+        isBound: !!binding,
+        boundSessionId: binding?.sessionId,
+        boundSessionTitle: binding?.title,
+      });
+    }
+  } catch (e) {
+    console.warn('[Session API] 获取飞书聊天列表失败:', e);
+  }
+
+  // 注意：飞书 API 不支持获取机器人的私聊列表
+  // 仅显示群聊
+  console.log('[Session API] 飞书 API 限制：无法获取私聊列表，仅显示群聊');
+}
+
+async function fetchDiscordChats(chats: PlatformChat[], bindingMap: Map<string, ChatSessionData>): Promise<void> {
+  try {
+    const client = (discordAdapter as unknown as { client: { guilds: { cache: Map<string, { id: string; name: string; channels: { cache: Map<string, { id: string; name: string; type: number; isTextBased: () => boolean }> } }> }; isActive: boolean } }).client;
+
+    if (!client) {
+      console.warn('[Session API] Discord 客户端未初始化');
+      return;
+    }
+
+    // 遍历所有服务器
+    for (const guild of client.guilds.cache.values()) {
+      // 遍历所有频道
+      for (const channel of guild.channels.cache.values()) {
+        // 只获取文本频道和私信频道
+        if (!channel.isTextBased()) continue;
+
+        const binding = bindingMap.get(channel.id);
+        const channelType = channel.type === 1 ? 'p2p' : channel.type === 11 ? 'channel' : 'group';
+
+        chats.push({
+          id: channel.id,
+          name: channel.name || channel.id,
+          type: channelType,
+          isBound: !!binding,
+          boundSessionId: binding?.sessionId,
+          boundSessionTitle: binding?.title,
+        });
+      }
+    }
+
+    console.log(`[Session API] 获取 Discord 频道列表: ${chats.length} 个`);
+  } catch (e) {
+    console.warn('[Session API] 获取 Discord 聊天列表失败:', e);
+  }
+}
+
+async function fetchTelegramChats(chats: PlatformChat[], bindingMap: Map<string, ChatSessionData>): Promise<void> {
+  try {
+    // Telegram Bot API 不支持获取所有聊天列表
+    // 只能返回已绑定的会话
+    console.log('[Session API] Telegram 不支持获取未绑定的聊天列表');
+
+    for (const [conversationId, session] of bindingMap) {
+      chats.push({
+        id: conversationId,
+        name: session.title || conversationId,
+        type: session.chatType || 'group',
+        isBound: true,
+        boundSessionId: session.sessionId,
+        boundSessionTitle: session.title,
+      });
+    }
+  } catch (e) {
+    console.warn('[Session API] 获取 Telegram 聊天列表失败:', e);
+  }
+}
+
+async function fetchQQChats(chats: PlatformChat[], bindingMap: Map<string, ChatSessionData>): Promise<void> {
+  try {
+    // 尝试通过 OneBot 获取群列表
+    const onebotClient = (qqAdapter as unknown as { onebotClient: { sendApi: (action: string, params: Record<string, unknown>) => Promise<unknown>; isActiveState: () => boolean } | null }).onebotClient;
+
+    if (onebotClient && onebotClient.isActiveState()) {
+      const groups = await onebotClient.sendApi('get_group_list', {}) as Array<{ group_id: number; group_name: string; member_count?: number }>;
+
+      if (Array.isArray(groups)) {
+        for (const group of groups) {
+          const conversationId = `${group.group_id}_group_`;
+          const binding = bindingMap.get(conversationId);
+
+          chats.push({
+            id: conversationId,
+            name: group.group_name || String(group.group_id),
+            type: 'group',
+            memberCount: group.member_count,
+            isBound: !!binding,
+            boundSessionId: binding?.sessionId,
+            boundSessionTitle: binding?.title,
+          });
+        }
+        console.log(`[Session API] 获取 QQ 群列表: ${chats.length} 个`);
+      }
+    } else {
+      // QQ 官方 API 或 OneBot 不可用，返回已绑定的会话
+      console.log('[Session API] QQ OneBot 不可用，返回已绑定会话');
+      for (const [conversationId, session] of bindingMap) {
+        chats.push({
+          id: conversationId,
+          name: session.title || conversationId,
+          type: session.chatType || 'group',
+          isBound: true,
+          boundSessionId: session.sessionId,
+          boundSessionTitle: session.title,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[Session API] 获取 QQ 聊天列表失败:', e);
+    // 失败时返回已绑定的会话
+    for (const [conversationId, session] of bindingMap) {
+      chats.push({
+        id: conversationId,
+        name: session.title || conversationId,
+        type: session.chatType || 'group',
+        isBound: true,
+        boundSessionId: session.sessionId,
+        boundSessionTitle: session.title,
+      });
+    }
+  }
 }

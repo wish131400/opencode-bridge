@@ -1,30 +1,36 @@
----
-name: qq-config-en
-description: QQ Platform Configuration Guide
-type: reference
+# QQ Configuration Guide
+
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
+
 ---
 
-# QQ Platform Configuration Guide
+## 1. Overview
 
 The QQ adapter supports two protocols:
-- **official**: QQ Official Channel Bot API (stable and reliable)
-- **onebot**: OneBot protocol (NapCat/go-cqhttp, community solution)
 
-## Environment Variables
+| Protocol | Description | Use Case |
+|----------|-------------|----------|
+| **official** | QQ Official Channel Bot API | Production, channel bots |
+| **onebot** | OneBot protocol (NapCat/go-cqhttp) | Personal groups, testing |
+
+---
+
+## 2. Environment Variables
 
 ### Common Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `QQ_ENABLED` | Yes | `false` | Enable QQ adapter |
+| `QQ_ENABLED` | No | `false` | Enable QQ adapter |
 | `QQ_PROTOCOL` | No | `onebot` | Protocol type: `official` or `onebot` |
 
 ### Official Protocol Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `QQ_APP_ID` | Yes | - | QQ Bot App ID |
-| `QQ_SECRET` | Yes | - | QQ Bot Secret |
+| `QQ_APP_ID` | Conditional | - | QQ Bot App ID |
+| `QQ_SECRET` | Conditional | - | QQ Bot Secret |
 | `QQ_CALLBACK_URL` | No | - | Callback URL (for webhook) |
 | `QQ_ENCRYPT_KEY` | No | - | Message encryption key |
 
@@ -32,22 +38,24 @@ The QQ adapter supports two protocols:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `QQ_ONEBOT_WS_URL` | No | - | OneBot WebSocket URL |
+| `QQ_ONEBOT_WS_URL` | Conditional | - | OneBot WebSocket URL |
 | `QQ_ONEBOT_HTTP_URL` | No | - | OneBot HTTP API URL |
 
-## Official Protocol (QQ Official Channel Bot)
+---
+
+## 3. Official Protocol (QQ Official Channel Bot)
 
 ### Create Bot
 
 1. Visit [QQ Open Platform](https://bot.q.qq.com/)
 2. Create a bot application
-3. Get App ID and Secret
+3. Get **App ID** and **Secret**
 4. Configure event subscription (if needed)
 
 ### Configuration Example
 
 ```bash
-# .env file
+# .env file or Web panel
 QQ_ENABLED=true
 QQ_PROTOCOL=official
 QQ_APP_ID=123456789
@@ -58,29 +66,37 @@ QQ_ENCRYPT_KEY=your-encrypt-key
 
 ### Message Format
 
-Official API has a 3000 character limit. Markdown formatting is automatically removed.
+- **Character limit**: 3000 characters maximum
+- **Markdown**: Automatically removed (plain text only)
 
 ### Features
 
-- Official API, stable and reliable
-- Supports private chat and channel messages
-- Supports message encryption
-- No message recall support
+| Feature | Support |
+|---------|---------|
+| Official API | ✅ Stable and reliable |
+| Private chat | ✅ Supported |
+| Channel messages | ✅ Supported |
+| Message encryption | ✅ Supported |
+| Message recall | ❌ Not supported |
 
-## OneBot Protocol
+---
+
+## 4. OneBot Protocol
 
 ### Prerequisites
 
 Deploy an OneBot implementation:
 
-- **NapCat**: Modern implementation based on QQ NT
-- **go-cqhttp**: Classic implementation (no longer maintained)
-- **LLOneBot**: Implementation based on LiteLoaderQQNT
+| Implementation | Description |
+|----------------|-------------|
+| **NapCat** | Modern implementation based on QQ NT |
+| **go-cqhttp** | Classic implementation (no longer maintained) |
+| **LLOneBot** | Implementation based on LiteLoaderQQNT |
 
 ### Configuration Example
 
 ```bash
-# .env file
+# .env file or Web panel
 QQ_ENABLED=true
 QQ_PROTOCOL=onebot
 QQ_ONEBOT_WS_URL=ws://127.0.0.1:3001
@@ -105,18 +121,23 @@ Example NapCat `napcat.json`:
 
 ### Features
 
-- Community solution, feature-rich
-- Supports traditional QQ groups and private chats
-- Supports message recall
-- Requires self-hosted OneBot implementation
+| Feature | Support |
+|---------|---------|
+| Community solution | ✅ Feature-rich |
+| Traditional QQ groups | ✅ Supported |
+| Private chats | ✅ Supported |
+| Message recall | ✅ Supported |
+| Self-hosted | ✅ Required |
 
-## Message Type Support
+---
+
+## 5. Message Type Support
 
 ### Official Protocol
 
 | Message Type | Send | Receive | Notes |
 |--------------|------|---------|-------|
-| Text | ✅ | ✅ | Supported, max 3000 characters |
+| Text | ✅ | ✅ | Max 3000 characters |
 | Image | ❌ | ✅ | Receive only |
 | File | ❌ | ✅ | Receive only |
 | Card | ⚠️ | ❌ | Falls back to plain text |
@@ -125,26 +146,50 @@ Example NapCat `napcat.json`:
 
 | Message Type | Send | Receive | Notes |
 |--------------|------|---------|-------|
-| Text | ✅ | ✅ | Supported, max 3000 characters |
+| Text | ✅ | ✅ | Max 3000 characters |
 | Image | ❌ | ✅ | Receive only |
 | File | ❌ | ✅ | Receive only |
 | Video | ❌ | ✅ | Receive only |
 | Voice | ❌ | ✅ | Receive only |
 | Card | ⚠️ | ❌ | Falls back to plain text |
 
-## ChatId Format
+---
+
+## 6. ChatId Format
 
 ### Official Protocol
 
-- Private chat: `c2c_<user_openid>`
-- Channel: `group_<group_openid>`
+| Type | Format | Example |
+|------|--------|---------|
+| Private chat | `c2c_<user_openid>` | `c2c_abc123` |
+| Channel | `group_<group_openid>` | `group_xyz789` |
 
 ### OneBot Protocol
 
-- Private chat: `<user_id>`
-- Group chat: `<group_id>_group_`
+| Type | Format | Example |
+|------|--------|---------|
+| Private chat | `<user_id>` | `123456789` |
+| Group chat | `<group_id>_group_` | `987654321_group_` |
 
-## Troubleshooting
+---
+
+## 7. Usage
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | View help information |
+| `/panel` | Open control panel |
+| `/model <provider:model>` | Switch model |
+| `/agent <name>` | Switch Agent |
+| `/session new` | Start new topic |
+| `/undo` | Undo last interaction |
+| `/compact` | Compress context |
+
+---
+
+## 8. Troubleshooting
 
 ### Official Protocol
 
@@ -159,7 +204,7 @@ Example NapCat `napcat.json`:
 | Issue | Possible Cause | Solution |
 |-------|----------------|----------|
 | WebSocket connection failed | OneBot not started | Start OneBot service |
-| Send message failed | Not connected or insufficient permissions | Check connection status and permissions |
+| Send message failed | Not connected or permissions | Check connection and permissions |
 | Not receiving group messages | Not in group or muted | Check bot's group status |
 
 ### Log Keywords
@@ -171,14 +216,19 @@ Example NapCat `napcat.json`:
 [QQ OneBot] WebSocket disconnected     # OneBot disconnected
 ```
 
-## Security Recommendations
+---
 
-1. Keep Secret and Encrypt Key secure
-2. Use HTTPS for callback URL
-3. Regularly check bot permission settings
-4. Monitor abnormal message sending behavior
+## 9. Security Recommendations
 
-## Selection Guide
+1. **Keep Secret secure** - Never commit to version control
+2. **Use HTTPS** for callback URL
+3. **Regularly check** bot permission settings
+4. **Monitor** abnormal message sending behavior
+5. **Rotate credentials** periodically
+
+---
+
+## 10. Selection Guide
 
 | Use Case | Recommended Protocol | Reason |
 |----------|---------------------|--------|
@@ -186,3 +236,11 @@ Example NapCat `napcat.json`:
 | Channel bot | Official | Native QQ Channel support |
 | Traditional QQ group | OneBot | Official API doesn't support traditional groups |
 | Quick testing | OneBot | Simple deployment, no approval needed |
+
+---
+
+## 11. Related Documentation
+
+- [Commands Reference](commands-en.md) - QQ command list
+- [Troubleshooting Guide](troubleshooting-en.md) - Common issues
+- [Deployment Guide](deployment-en.md) - Service operations

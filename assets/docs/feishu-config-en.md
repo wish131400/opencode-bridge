@@ -1,12 +1,21 @@
-# Feishu Backend Configuration Guide
+# Feishu Configuration Guide
 
-This document describes how to configure the Feishu application for OpenCode Bridge.
+**Version**: v2.9.5-beta
+**Last Updated**: 2026-03-23
 
 ---
 
-## 1. Event Subscriptions
+## 1. Overview
 
-Recommended to use long connection mode (WebSocket events).
+This document describes how to configure the Feishu application for OpenCode Bridge.
+
+### Connection Mode
+
+**Recommended**: WebSocket Long Connection mode for real-time event delivery.
+
+---
+
+## 2. Event Subscriptions
 
 ### Required Events
 
@@ -26,19 +35,19 @@ Recommended to use long connection mode (WebSocket events).
 
 ---
 
-## 2. Application Permissions
+## 3. Application Permissions
 
 ### Permission Groups
 
 | Capability Group | APIs Called | Purpose |
 |------------------|-------------|---------|
-| Message Read/Write (`im:message`) | `im:message.p2p_msg:readonly`, `im:message.group_at_msg:readonly`, `im:message.group_msg`, `im:message.reactions:read`, `im:message.reactions:write_only` | Send text/cards, streaming updates, recall messages |
-| Group Management (`im:chat`) | `im:chat.members:read`, `im:chat.members:write_only` | Create groups, invite members, check members, cleanup invalid groups |
-| Resource Download (`im:resource`) | `im.messageResource.get` | Download image/file attachments and forward to OpenCode |
+| **Message Read/Write** (`im:message`) | `im:message.p2p_msg:readonly`, `im:message.group_at_msg:readonly`, `im:message.group_msg`, `im:message.reactions:read`, `im:message.reactions:write_only` | Send text/cards, streaming updates, recall messages |
+| **Group Management** (`im:chat`) | `im:chat.members:read`, `im:chat.members:write_only` | Create groups, invite members, check members, cleanup invalid groups |
+| **Resource Download** (`im:resource`) | `im.messageResource.get` | Download image/file attachments and forward to OpenCode |
 
 ### Batch Import Permission Configuration
 
-Copy the following to `acc.json`, then import in Feishu Developer Backend → Permission Management → Batch Import/Export:
+Copy the following JSON to `acc.json`, then import in Feishu Developer Backend → Permission Management → Batch Import/Export:
 
 ```json
 {
@@ -62,37 +71,37 @@ Copy the following to `acc.json`, then import in Feishu Developer Backend → Pe
 
 ---
 
-## 3. Configuration Steps
+## 4. Configuration Steps
 
 ### Step 1: Create Feishu Application
 
 1. Visit [Feishu Open Platform](https://open.feishu.cn/)
 2. Create a new application
-3. Record the App ID and App Secret
+3. Record the **App ID** and **App Secret**
 
 ### Step 2: Configure Event Subscription
 
-1. In application settings, find "Event Subscription"
-2. Recommended to use "Long Connection" mode (WebSocket)
-3. Add required events
+1. In application settings, find **"Event Subscription"**
+2. Select **"Long Connection"** mode (WebSocket)
+3. Add required events from the table above
 
 ### Step 3: Configure Permissions
 
-1. Find "Permission Management" in application settings
-2. Add required permissions
-3. Or batch import using the JSON above
+1. Find **"Permission Management"** in application settings
+2. Add required permissions individually
+3. Or use batch import with the JSON above
 
 ### Step 4: Configure Encryption
 
-1. Find "Encryption" settings
-2. Record the Encrypt Key and Verification Token
-3. Configure in OpenCode Bridge
+1. Find **"Encryption"** settings
+2. Record the **Encrypt Key** and **Verification Token**
+3. Configure in OpenCode Bridge Web panel
 
 ---
 
-## 4. Bridge Configuration
+## 5. Bridge Configuration
 
-Configure the following parameters in Web panel or `.env`:
+Configure the following parameters in Web panel (`http://localhost:4098`):
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -104,31 +113,55 @@ Configure the following parameters in Web panel or `.env`:
 
 ---
 
-## 5. Verification
+## 6. Verification
 
 After configuration, verify in Feishu:
 
-1. Send a message to the bot in private chat
-2. If configured correctly, the bot should respond
-3. Test group chat by @mentioning the bot
+1. **Private Chat**: Send a message to the bot in private chat
+   - Expected: Bot responds with help message
+2. **Group Chat**: @mention the bot and send a message
+   - Expected: Bot responds to @mentioned messages
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 ### Bot Not Responding
 
-1. Check `FEISHU_ENABLED` is `true`
-2. Check App ID and App Secret are correct
-3. Check event subscription is properly configured
-4. Check permissions are granted
+| Check | Action |
+|-------|--------|
+| `FEISHU_ENABLED` | Verify set to `true` |
+| App credentials | Verify App ID and App Secret are correct |
+| Event subscription | Verify events are properly configured |
+| Permissions | Verify all required permissions are granted |
 
 ### Permission Denied
 
-1. Check all required permissions are granted
-2. Wait for permission changes to take effect (may take a few minutes)
+| Check | Action |
+|-------|--------|
+| Permission status | Verify all required permissions are granted |
+| Wait time | Permission changes may take a few minutes to take effect |
 
 ### Card Actions Not Working
 
-1. Check `card.action.trigger` event is subscribed
-2. Check the card callback URL is accessible
+| Check | Action |
+|-------|--------|
+| Event subscription | Verify `card.action.trigger` event is subscribed |
+| Callback URL | Verify the card callback URL is accessible |
+| Network | Check network connectivity to Feishu API |
+
+### Messages Not Received
+
+| Check | Action |
+|-------|--------|
+| Long connection status | Check WebSocket connection in logs |
+| Encrypt Key | Verify encryption key matches Feishu backend |
+| Verification Token | Verify token matches Feishu backend |
+
+---
+
+## 8. Related Documentation
+
+- [Commands Reference](commands-en.md) - Feishu command list
+- [Troubleshooting Guide](troubleshooting-en.md) - Common issues and solutions
+- [Deployment Guide](deployment-en.md) - Service deployment and operations
