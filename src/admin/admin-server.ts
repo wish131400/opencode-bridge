@@ -27,6 +27,7 @@ import { configStore, type BridgeSettings } from '../store/config-store.js';
 import { logStore } from '../store/log-store.js';
 import type { RuntimeCronManager } from '../reliability/runtime-cron.js';
 import type { BridgeManager } from './bridge-manager.js';
+import { createSessionRoutes } from './routes/session.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -340,8 +341,18 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
       return;
     }
 
-    // 验证旧密码
-    const currentPassword = configStore.getAdminPassword() || '';
+    const currentPassword = configStore.getAdminPassword();
+    const isFirstSetup = !currentPassword;
+
+    // 首次设置密码：无需验证旧密码
+    if (isFirstSetup) {
+      configStore.setAdminPassword(newPassword);
+      configStore.setPasswordChangedAt(new Date().toISOString());
+      res.json({ ok: true, message: '密码设置成功', isFirstSetup: true });
+      return;
+    }
+
+    // 修改密码：需要验证旧密码
     if (oldPassword !== currentPassword) {
       res.status(401).json({ error: '原密码错误' });
       return;
@@ -879,57 +890,6 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
     }
   });
 
-  // ── GET /api/sessions
-  api.get('/sessions', async (_req, res) => {
-    try {
-      // 从 chat-session-store 读取当前活跃的会话
-      const { chatSessionStore } = await import('../store/chat-session.js');
-
-      // 获取飞书会话
-      const feishuChatIds = chatSessionStore.getChatIdsByPlatform?.('feishu') || [];
-      const feishuSessions = feishuChatIds.map((chatId: string) => {
-        const session = chatSessionStore.getSession?.(chatId);
-        return {
-          chatId,
-          title: session?.title || '未命名会话',
-          userId: session?.creatorId,
-        };
-      });
-
-      // 获取 Discord 会话（从 chatSessionStore 中获取 discord 平台的会话）
-      const discordChatIds = chatSessionStore.getChatIdsByPlatform?.('discord') || [];
-      const discordSessions = discordChatIds.map((chatId: string) => {
-        const session = chatSessionStore.getSession?.(chatId);
-        return {
-          conversationId: chatId,
-          title: session?.title || '未命名会话',
-          userId: session?.creatorId,
-        };
-      });
-
-      // 获取企业微信会话
-      const wecomChatIds = chatSessionStore.getChatIdsByPlatform?.('wecom') || [];
-      const wecomSessions = wecomChatIds.map((chatId: string) => {
-        const session = chatSessionStore.getSession?.(chatId);
-        return {
-          conversationId: chatId,
-          title: session?.title || '未命名会话',
-          userId: session?.creatorId,
-        };
-      });
-
-      res.json({
-        feishu: feishuSessions,
-        discord: discordSessions,
-        wecom: wecomSessions,
-      });
-    } catch (error: any) {
-      console.error('[Admin] 获取会话列表失败:', error.message);
-      // 如果获取失败，返回空列表
-      res.json({ feishu: [], discord: [], wecom: [] });
-    }
-  });
-
   // ── GET /api/logs（查询日志）
   api.get('/logs', (req, res) => {
     const { level, search, start, end, page = '1', limit = '100' } = req.query;
@@ -957,6 +917,9 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
     logStore.clear();
     res.json({ ok: true, message: '日志已清空' });
   });
+
+  // ── Session 管理路由
+  api.use('/sessions', createSessionRoutes());
 
   // ── POST /api/admin/shutdown（终止服务）
   api.post('/admin/shutdown', async (_req, res) => {

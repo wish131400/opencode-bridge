@@ -7,6 +7,7 @@ const routes = [
   { path: '/change-password', component: () => import('../views/ChangePassword.vue'), meta: { title: '修改密码' } },
   { path: '/dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '系统状态' } },
   { path: '/platforms', component: () => import('../views/Platforms.vue'), meta: { title: '平台接入' } },
+  { path: '/sessions', component: () => import('../views/Sessions.vue'), meta: { title: 'Session 管理' } },
   { path: '/opencode', component: () => import('../views/OpenCode.vue'), meta: { title: 'OpenCode 对接' } },
   { path: '/reliability', component: () => import('../views/Reliability.vue'), meta: { title: '高可用配置' } },
   { path: '/routing', component: () => import('../views/CoreRouting.vue'), meta: { title: '核心行为' } },

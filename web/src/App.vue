@@ -15,6 +15,10 @@
           <el-icon><ChatDotRound /></el-icon>
           <span>平台接入</span>
         </el-menu-item>
+        <el-menu-item index="/sessions">
+          <el-icon><Link /></el-icon>
+          <span>Session 管理</span>
+        </el-menu-item>
         <el-menu-item index="/opencode">
           <el-icon><Connection /></el-icon>
           <span>OpenCode 对接</span>
@@ -114,7 +118,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataAnalysis, Loading, Document, SwitchButton, Key } from '@element-plus/icons-vue'
+import { DataAnalysis, Loading, Document, SwitchButton, Key, Link } from '@element-plus/icons-vue'
 import { useConfigStore } from './stores/config'
 import { configApi } from './api/index'
 import type { ServiceStatus } from './api/index'

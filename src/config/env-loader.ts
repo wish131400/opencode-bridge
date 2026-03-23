@@ -45,10 +45,10 @@ export const resolvedEnvFile = (() => {
 export function loadEnvFile(): string | undefined {
   if (!resolvedEnvFile) {
     const generatedEnvFile = path.resolve(process.cwd(), '.env');
-    // 生成 16 字节（32 位十六进制）的高强度密码
-    const pureEnvContent = `ADMIN_PORT=4098\nADMIN_PASSWORD=${crypto.randomBytes(16).toString('hex')}\n`;
+    // 首次部署不生成密码，用户首次访问 Web 时设置
+    const pureEnvContent = `ADMIN_PORT=4098\n`;
     fs.writeFileSync(generatedEnvFile, pureEnvContent, 'utf-8');
-    console.log('[Config] 🔑 检测到无 .env 文件，已自动生成默认包含 ADMIN_PORT=4098 与高强度口令的 .env 文件。');
+    console.log('[Config] 🔑 检测到无 .env 文件，已自动生成默认配置。首次访问 Web 管理面板时请设置密码。');
     dotenv.config({ path: generatedEnvFile });
     process.env.OPENCODE_BRIDGE_ACTIVE_ENV_FILE = generatedEnvFile;
     return generatedEnvFile;

@@ -209,6 +209,80 @@ export interface WeixinLoginSession {
   error?: string
 }
 
+// Session 管理相关类型
+export interface SessionBindingItem {
+  platform: string
+  conversationId: string
+  sessionId: string
+  title?: string
+  chatType?: 'p2p' | 'group'
+  creatorId: string
+  sessionDirectory?: string
+  resolvedDirectory?: string
+  projectName?: string
+  createdAt: number
+}
+
+export interface SessionBindingsResponse {
+  bindings: SessionBindingItem[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface CreateBindingRequest {
+  platform: string
+  conversationId: string
+  sessionId: string
+  title?: string
+  creatorId?: string
+  chatType?: 'p2p' | 'group'
+  sessionDirectory?: string
+}
+
+export interface UpdateBindingRequest {
+  sessionId?: string
+  title?: string
+  sessionDirectory?: string
+  resolvedDirectory?: string
+  projectName?: string
+}
+
+export interface SessionStats {
+  total: number
+  byPlatform: Record<string, number>
+  byType: { p2p: number; group: number; unknown: number }
+}
+
+export interface OpenCodeSessionBinding {
+  platform: string
+  conversationId: string
+  title?: string
+  chatType?: 'p2p' | 'group'
+}
+
+export interface OpenCodeSession {
+  id: string
+  title?: string
+  createdAt?: string
+  projectPath?: string
+  directory?: string
+  isBound: boolean
+  bindings: OpenCodeSessionBinding[]
+  localOnly?: boolean  // 仅存在于本地绑定，OpenCode 中已不存在
+}
+
+export interface OpenCodeSessionsResponse {
+  sessions: OpenCodeSession[]
+  openCodeAvailable: boolean
+}
+
+export interface PlatformInfo {
+  id: string
+  name: string
+  icon: string
+}
+
 export const weixinApi = {
   async getAccounts(): Promise<WeixinAccount[]> {
     const res = await http.get<{ accounts: WeixinAccount[] }>('/weixin/accounts')
@@ -425,5 +499,83 @@ export const configApi = {
   async setLoginTimeout(timeoutMinutes: number): Promise<{ ok: boolean; timeoutMinutes: number; message: string }> {
     const res = await http.put<{ ok: boolean; timeoutMinutes: number; message: string }>('/admin/login-timeout', { timeoutMinutes })
     return res.data
+  },
+}
+
+export const sessionApi = {
+  async getBindings(params?: {
+    platform?: string
+    chatType?: 'p2p' | 'group'
+    creatorId?: string
+    page?: number
+    limit?: number
+    search?: string
+  }): Promise<SessionBindingsResponse> {
+    const res = await http.get<SessionBindingsResponse>('/sessions/bindings', { params })
+    return res.data
+  },
+
+  async getStats(): Promise<SessionStats> {
+    const res = await http.get<SessionStats>('/sessions/bindings/stats')
+    return res.data
+  },
+
+  async createBinding(data: CreateBindingRequest): Promise<{ ok: boolean; binding: SessionBindingItem }> {
+    const res = await http.post<{ ok: boolean; binding: SessionBindingItem }>('/sessions/bindings', data)
+    return res.data
+  },
+
+  async updateBinding(
+    platform: string,
+    conversationId: string,
+    data: UpdateBindingRequest
+  ): Promise<{ ok: boolean; message: string }> {
+    const res = await http.put<{ ok: boolean; message: string }>(
+      `/sessions/bindings/${platform}/${encodeURIComponent(conversationId)}`,
+      data
+    )
+    return res.data
+  },
+
+  async deleteBinding(
+    platform: string,
+    conversationId: string,
+    deleteOpenCode = false
+  ): Promise<{ ok: boolean; message: string; openCodeDeleted: boolean }> {
+    const res = await http.delete<{ ok: boolean; message: string; openCodeDeleted: boolean }>(
+      `/sessions/bindings/${platform}/${encodeURIComponent(conversationId)}`,
+      { params: { deleteOpenCode } }
+    )
+    return res.data
+  },
+
+  async batchOperation(
+    action: 'unbind' | 'delete',
+    bindings: Array<{ platform: string; conversationId: string }>
+  ): Promise<{
+    ok: boolean
+    action: string
+    total: number
+    successCount: number
+    failCount: number
+    results: Array<{ platform: string; conversationId: string; success: boolean; error?: string }>
+  }> {
+    const res = await http.post('/sessions/bindings/batch', { action, bindings })
+    return res.data
+  },
+
+  async getOpenCodeSessions(): Promise<{ sessions: OpenCodeSession[]; openCodeAvailable: boolean }> {
+    const res = await http.get<{ sessions: OpenCodeSession[]; openCodeAvailable: boolean }>('/sessions/opencode/list')
+    return res.data
+  },
+
+  async deleteOpenCodeSession(sessionId: string): Promise<{ ok: boolean; message: string }> {
+    const res = await http.delete<{ ok: boolean; message: string }>(`/sessions/opencode/${encodeURIComponent(sessionId)}`)
+    return res.data
+  },
+
+  async getPlatforms(): Promise<PlatformInfo[]> {
+    const res = await http.get<{ platforms: PlatformInfo[] }>('/sessions/platforms')
+    return res.data.platforms
   },
 }
