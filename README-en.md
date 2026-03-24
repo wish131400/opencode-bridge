@@ -15,16 +15,31 @@
 
 ## 📱 Supported Platforms
 
-| Platform | Status | Core Features |
-|----------|--------|---------------|
-| Feishu (Lark) | ✅ Full Support | Card interaction, streaming output, permission confirmation, file transfer, recall sync |
-| Discord | ✅ Full Support | Component interaction, Embed messages, Slash commands, channel management |
-| WeCom (Enterprise WeChat) | ✅ Full Support | Text interaction, message sending/receiving |
-| Telegram | ✅ Full Support | Text interaction, Inline keyboard |
-| QQ (OneBot) | ✅ Full Support | Text interaction, group chat support |
-| WhatsApp | ✅ Full Support | Text interaction, media messages |
-| WeChat (Personal) | ✅ Full Support | QR code login, text interaction |
-| DingTalk | ✅ Full Support | Stream mode, direct/group chat, message sending/receiving |
+### Platform Overview
+
+| Platform | Status | Login Method |
+|----------|--------|--------------|
+| Feishu (Lark) | ✅ Full Support | Bot Application |
+| Discord | ✅ Full Support | Bot Token |
+| WeCom (Enterprise WeChat) | ✅ Full Support | Bot Application |
+| Telegram | ✅ Full Support | Bot Token |
+| QQ (OneBot) | ✅ Full Support | OneBot Protocol |
+| WhatsApp | ✅ Full Support | Phone Number Pairing |
+| WeChat (Personal) | ✅ Full Support | QR Code Login |
+| DingTalk | ✅ Full Support | Bot Application |
+
+### Feature Comparison
+
+| Feature | Feishu | Discord | WeCom | Telegram | QQ | WhatsApp | WeChat | DingTalk |
+|---------|:------:|:-------:|:-----:|:--------:|:--:|:--------:|:------:|:--------:|
+| Text Message | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Rich Media/Card | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Streaming Output | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Permission Interaction | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| File Transfer | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Group Chat | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Private Chat | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Message Recall | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
@@ -116,25 +131,44 @@ You will be prompted to set an administrator password on first access.
 
 ## 📝 Command Reference
 
-### Feishu Commands
+### Common Commands
+
+The following commands are available on all platforms:
 
 | Command | Description |
 |---------|-------------|
 | `/help` | View help |
-| `/panel` | Open control panel (model, agent, effort) |
-| `/model <provider:model>` | Switch model |
-| `/agent <name>` | Switch Agent |
+| `/status` | View current status |
+| `/panel` | Display control panel |
+| `/model` | View current model |
+| `/model <name>` | Switch model |
+| `/models` | List all available models |
+| `/agent` | View current agent |
+| `/agent <name>` | Switch agent |
+| `/agents` | List all available agents |
+| `/effort` | View current reasoning effort |
 | `/effort <level>` | Set reasoning effort |
 | `/session new` | Start new topic |
-| `/session <sessionId>` | Bind existing session |
+| `/sessions` | List sessions |
 | `/undo` | Undo last interaction |
+| `/stop` | Stop current response |
 | `/compact` | Compress context |
+| `/rename <name>` | Rename session |
 | `/project list` | List available projects |
-| `/send <path>` | Send file to group |
-| `/cron ...` | Manage Cron tasks |
-| `!<shell-cmd>` | Passthrough Shell command |
+| `/clear` | Reset conversation context |
 
-### Discord Commands
+### Feishu Exclusive Commands
+
+| Command | Description |
+|---------|-------------|
+| `/send <path>` | Send file to group chat |
+| `/cron ...` | Manage Cron tasks |
+| `/commands` | Generate command list file |
+| `/create_chat` | Show create group card in private chat |
+| `!<shell-cmd>` | Passthrough Shell command (whitelist) |
+| `//xxx` | Passthrough namespace command |
+
+### Discord Exclusive Commands
 
 | Command | Description |
 |---------|-------------|
@@ -146,52 +180,38 @@ You will be prompted to set an administrator password on first access.
 | `///workdir` | Set working directory |
 | `///cron ...` | Manage Cron tasks |
 
-### WeCom Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | View help |
-| `/panel` | Open control panel |
-| `/model <provider:model>` | Switch model |
-| `/agent <name>` | Switch Agent |
-| `/session new` | Start new topic |
-| `/undo` | Undo last interaction |
-| `/compact` | Compress context |
-
 ---
 
 ## 🏗️ Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Platform Adapter Layer                    │
-│  Feishu │ Discord │ WeCom │ Telegram │ QQ │ WhatsApp │ Weixin │
-└────┬────────┬────────┬────────┬────────┬────────┬──────────┘
-     │        │        │        │        │        │
-     └────────┴────────┴────────┴────────┴────────┘
-                        │
-              ┌─────────▼─────────┐
-              │     Router Layer      │
-              │   RootRouter      │
-              └─────────┬─────────┘
-                        │
-     ┌──────────────────┼──────────────────┐
-     │                  │                  │
-┌────▼────┐      ┌─────▼─────┐      ┌─────▼─────┐
-│Permission│     │ Question  │      │ Output    │
-│ Handler │      │ Handler   │      │ Buffer    │
-└────┬────┘      └─────┬─────┘      └─────┬─────┘
-     │                 │                  │
-     └─────────────────┼──────────────────┘
-                       │
-             ┌─────────▼─────────┐
-             │   OpenCode Integration   │
-             │  OpencodeClient   │
-             └─────────┬─────────┘
-                       │
-             ┌─────────▼─────────┐
-             │   OpenCode CLI    │
-             └───────────────────┘
+```mermaid
+flowchart TB
+    subgraph platforms["Platform Adapter Layer"]
+        feishu["Feishu"]
+        discord["Discord"]
+        wecom["WeCom"]
+        telegram["Telegram"]
+        qq["QQ"]
+        whatsapp["WhatsApp"]
+        weixin["WeChat"]
+        dingtalk["DingTalk"]
+    end
+
+    router["Router Layer<br/>RootRouter"]
+
+    subgraph handlers["Handler Modules"]
+        permission["Permission<br/>Handler"]
+        question["Question<br/>Handler"]
+        output["Output<br/>Buffer"]
+    end
+
+    opencode["OpenCode Integration<br/>OpencodeClient"]
+    cli["OpenCode CLI"]
+
+    platforms --> router
+    router --> handlers
+    handlers --> opencode
+    opencode --> cli
 ```
 
 ---
