@@ -187,7 +187,7 @@ The following commands are available on all platforms:
 ### System Architecture Diagram
 
 ```mermaid
-flowchart TB
+flowchart LR
     %% Style definitions
     classDef platform fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,rx:8px
     classDef core fill:#fff3e0,stroke:#f57c00,stroke-width:2px,rx:8px
@@ -196,7 +196,7 @@ flowchart TB
     classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:2px,rx:8px,stroke-dasharray:5 5
 
     subgraph PlatformLayer["📱 Platform Adapter Layer"]
-        direction LR
+        direction TB
         feishu["✈️ Feishu"]:::platform
         discord["🎮 Discord"]:::platform
         wecom["💼 WeCom"]:::platform
@@ -234,19 +234,6 @@ flowchart TB
     Handlers --> sdk
     sdk --> opencode
     opencode -.-> cli
-
-    %% Legend
-    subgraph Legend["Legend"]
-        direction TB
-        L1["Platform Adapter"]:::platform
-        L2["Core Router"]:::core
-        L3["Business Handler"]:::handler
-        L4["SDK Integration"]:::opencode
-        L5["External Dependency"]:::external
-    end
-
-    class Legend transparent
-    class L1,L2,L3,L4,L5 transparent
 ```
 
 **Architecture Description:**

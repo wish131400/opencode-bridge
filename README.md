@@ -187,7 +187,7 @@ http://localhost:4098
 ### 系统架构图
 
 ```mermaid
-flowchart TB
+flowchart LR
     %% 样式定义
     classDef platform fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,rx:8px
     classDef core fill:#fff3e0,stroke:#f57c00,stroke-width:2px,rx:8px
@@ -196,7 +196,7 @@ flowchart TB
     classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:2px,rx:8px,stroke-dasharray:5 5
 
     subgraph PlatformLayer["📱 平台适配层"]
-        direction LR
+        direction TB
         feishu["✈️ 飞书"]:::platform
         discord["🎮 Discord"]:::platform
         wecom["💼 企业微信"]:::platform
@@ -234,19 +234,6 @@ flowchart TB
     Handlers --> sdk
     sdk --> opencode
     opencode -.-> cli
-
-    %% 图例说明
-    subgraph Legend["图例"]
-        direction TB
-        L1["平台适配"]:::platform
-        L2["核心路由"]:::core
-        L3["业务处理"]:::handler
-        L4["SDK 集成"]:::opencode
-        L5["外部依赖"]:::external
-    end
-
-    class Legend transparent
-    class L1,L2,L3,L4,L5 transparent
 ```
 
 **架构说明：**
