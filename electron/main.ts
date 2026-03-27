@@ -155,6 +155,7 @@ function createWindow() {
     minHeight: 600,
     title: 'OpenCode Bridge',
     icon: path.join(__dirname, '../assets/icon.png'),
+    autoHideMenuBar: true, // 隐藏菜单栏
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
