@@ -83,29 +83,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: |
-            release/*.exe
-            release/*.yml
+          path: release/*.exe
 
       - name: Upload artifacts (macOS)
         if: matrix.platform == 'mac'
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: |
-            release/*.dmg
-            release/*.zip
-            release/*.yml
+          path: release/*.dmg
 
       - name: Upload artifacts (Linux)
         if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: |
-            release/*.AppImage
-            release/*.deb
-            release/*.yml
+          path: release/*.AppImage
 
   release:
     needs: build
