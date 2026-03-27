@@ -43,7 +43,7 @@ function getUserDataPath(): string {
 }
 
 /**
- * 启动后端服务
+ * 启动后端服务（Admin 独立进程，管理 Bridge 子进程）
  */
 function startBackend() {
   if (backendProcess) {
@@ -52,7 +52,8 @@ function startBackend() {
 
   // 获取应用根目录
   const appPath = isDev ? path.resolve(__dirname, '..') : app.getAppPath();
-  const backendPath = path.join(appPath, 'dist/index.js');
+  // 启动 Admin 独立进程，它会管理 Bridge 子进程
+  const backendPath = path.join(appPath, 'dist/admin/index.js');
 
   const dataPath = getUserDataPath();
   console.log('[Electron] __dirname:', __dirname);
