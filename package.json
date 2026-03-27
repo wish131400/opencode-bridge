@@ -209,10 +209,6 @@
       "icon": "assets/icon.png",
       "category": "Network;Chat;InstantMessaging;"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "HNGM-HP",
-      "repo": "opencode-bridge"
-    }
+    "publish": null
   }
 }
