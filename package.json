@@ -35,10 +35,10 @@
     "build:all": "npm run build:web && npm run build && npm run build:electron",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux",
+    "dist": "electron-builder --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node scripts/start.mjs",
@@ -156,8 +156,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
-      "publish": "never"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -187,8 +186,7 @@
       "extendInfo": {
         "NSHighResolutionCapable": true,
         "CFBundleShortVersionString": "${version}"
-      },
-      "publish": "never"
+      }
     },
     "dmg": {
       "contents": [
@@ -209,8 +207,7 @@
         "AppImage"
       ],
       "icon": "assets/icon.png",
-      "category": "Network;Chat;InstantMessaging;",
-      "publish": "never"
+      "category": "Network;Chat;InstantMessaging;"
     }
   }
 }
