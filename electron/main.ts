@@ -584,11 +584,11 @@ if (!gotTheLock) {
   });
 }
 
-// 所有窗口关闭时退出（macOS 除外）
+// 窗口全部关闭时不退出应用（后台继续运行）
+// 只有通过托盘菜单"退出"才真正退出
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // 不调用 app.quit()，让后台服务继续运行
+  console.log('[Electron] All windows closed, app continues in background');
 });
 
 // 应用退出前清理
