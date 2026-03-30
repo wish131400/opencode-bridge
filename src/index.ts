@@ -1931,9 +1931,33 @@ async function main() {
   process.on('SIGUSR2', () => {
     void gracefulShutdown('SIGUSR2');
   }); // nodemon 重启信号
+
+  // 返回停止函数，供进程合并模式下使用
+  return {
+    stop: () => gracefulShutdown('EMBEDDED_STOP'),
+  };
 }
 
-if (process.env.VITEST !== 'true') {
+// 导出 Bridge 控制接口（供进程合并模式使用）
+let runningInstance: { stop: () => Promise<void> } | null = null;
+
+export async function startBridge(): Promise<{ stop: () => Promise<void> }> {
+  if (runningInstance) {
+    console.log('[Bridge] Already running');
+    return runningInstance;
+  }
+  runningInstance = await main();
+  return runningInstance;
+}
+
+export async function stopBridge(): Promise<void> {
+  if (runningInstance) {
+    await runningInstance.stop();
+    runningInstance = null;
+  }
+}
+
+if (process.env.VITEST !== 'true' && process.env.BRIDGE_EMBEDDED_MODE !== '1') {
   main().catch(error => {
     console.error('Fatal Error:', error);
     process.exit(1);
