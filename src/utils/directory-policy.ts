@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import dotenv from 'dotenv';
 import { directoryConfig } from '../config.js';
+import { configStore } from '../store/config-store.js';
 
 export type DirectorySource = 'explicit' | 'alias' | 'chat_default' | 'env_default' | 'server_default';
 
@@ -56,6 +58,100 @@ interface DirectoryResolveOptions {
 const isWindows = process.platform === 'win32';
 
 export class DirectoryPolicy {
+  private static detectAllowlistConfigMode(): {
+    mode: 'env' | 'db' | 'mixed' | 'unknown';
+    envFile?: string;
+  } {
+    const envFile = process.env.OPENCODE_BRIDGE_ACTIVE_ENV_FILE?.trim();
+    const migrated = configStore.isMigrated();
+
+    let envHasAllowlist = false;
+    if (envFile) {
+      try {
+        const content = fs.readFileSync(envFile, 'utf-8');
+        const parsed = dotenv.parse(content);
+        envHasAllowlist = typeof parsed.ALLOWED_DIRECTORIES === 'string'
+          && parsed.ALLOWED_DIRECTORIES.trim().length > 0;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (envHasAllowlist && migrated) {
+      return { mode: 'mixed', envFile };
+    }
+
+    if (envHasAllowlist) {
+      return { mode: 'env', envFile };
+    }
+
+    if (migrated) {
+      return { mode: 'db' };
+    }
+
+    if (envFile) {
+      return { mode: 'env', envFile };
+    }
+
+    return { mode: 'unknown' };
+  }
+
+  private static buildAllowlistGuidance(): string {
+    const detected = this.detectAllowlistConfigMode();
+    const adminPort = process.env.ADMIN_PORT?.trim() || '4098';
+    const adminUrl = `http://localhost:${adminPort}`;
+
+    if (detected.mode === 'mixed' && detected.envFile) {
+      return `当前实例已启用 Web 管理面板配置，但 ${detected.envFile} 中也配置了 ALLOWED_DIRECTORIES，运行时会优先使用 .env；请先修改 ${detected.envFile} 中的 ALLOWED_DIRECTORIES，修改后重启服务`;
+    }
+
+    if (detected.mode === 'env' && detected.envFile) {
+      return `当前实例使用 .env 配置，请在 ${detected.envFile} 中设置 ALLOWED_DIRECTORIES，修改后重启服务`;
+    }
+
+    if (detected.mode === 'db') {
+      return `当前实例使用 Web 管理面板 / SQLite 配置，请在 Web 管理面板的“核心行为 -> 工作目录与项目 -> 允许的目录白名单（ALLOWED_DIRECTORIES）”中添加该目录\n管理面板地址：${adminUrl}`;
+    }
+
+    return `请在 Web 管理面板的“核心行为 -> 工作目录与项目 -> 允许的目录白名单（ALLOWED_DIRECTORIES）”中添加该目录；如果仍使用 .env 配置，请修改 ALLOWED_DIRECTORIES 后重启服务\n管理面板地址：${adminUrl}`;
+  }
+
+  private static buildAllowlistUserMessage(
+    rawPath: string,
+    variant: 'not_allowed' | 'missing_allowlist',
+    allowedDirectories: string[]
+  ): string {
+    const detected = this.detectAllowlistConfigMode();
+    const sourceText =
+      detected.mode === 'env' ? '配置来源：.env' :
+      detected.mode === 'db' ? '配置来源：Web 管理面板 / SQLite' :
+      detected.mode === 'mixed' ? '配置来源：混合模式（当前 .env 优先）' :
+      '配置来源：未识别';
+    const allowlistText = allowedDirectories.length > 0
+      ? `当前允许目录：${allowedDirectories.join(' | ')}`
+      : '当前允许目录：未配置';
+    const title = variant === 'missing_allowlist'
+      ? '未配置允许目录，禁止使用用户输入路径'
+      : '目录不在允许范围内';
+
+    return `${title}\n尝试目录：${rawPath}\n${sourceText}\n${allowlistText}\n${this.buildAllowlistGuidance()}`;
+  }
+
+  static buildProjectListEmptyMessage(): string {
+    const detected = this.detectAllowlistConfigMode();
+    const allowlist = directoryConfig.allowedDirectories;
+    const sourceText =
+      detected.mode === 'env' ? '配置来源：.env' :
+      detected.mode === 'db' ? '配置来源：Web 管理面板 / SQLite' :
+      detected.mode === 'mixed' ? '配置来源：混合模式（当前 .env 优先）' :
+      '配置来源：未识别';
+    const allowlistText = allowlist.length > 0
+      ? `当前允许目录：${allowlist.join(' | ')}`
+      : '当前允许目录：未配置';
+
+    return `暂无可用项目\n${sourceText}\n${allowlistText}\n${this.buildAllowlistGuidance()}\n也可通过 PROJECT_ALIASES 配置项目别名`;
+  }
+
   // 解析并校验目录（九阶段）
   static resolve(options?: DirectoryResolveOptions): DirectoryResolveResult {
     const explicitDirectory = options?.explicitDirectory?.trim();
@@ -165,7 +261,7 @@ export class DirectoryPolicy {
         return {
           ok: false,
           code: 'not_allowed',
-          userMessage: '目录不在允许范围内',
+          userMessage: this.buildAllowlistUserMessage(raw, 'not_allowed', allowedDirectories),
           internalDetail: `不在允许范围: ${normalized}`,
           ...(source ? { source } : {}),
           raw,
@@ -175,7 +271,7 @@ export class DirectoryPolicy {
       return {
         ok: false,
         code: 'explicit_requires_allowlist',
-        userMessage: '未配置允许目录，禁止使用用户输入路径',
+        userMessage: this.buildAllowlistUserMessage(raw, 'missing_allowlist', allowedDirectories),
         internalDetail: 'explicit 输入需要 ALLOWED_DIRECTORIES',
         raw,
       };
@@ -238,7 +334,7 @@ export class DirectoryPolicy {
         return {
           ok: false,
           code: 'realpath_not_allowed',
-          userMessage: '目录不在允许范围内',
+          userMessage: this.buildAllowlistUserMessage(raw, 'not_allowed', allowedDirectories),
           internalDetail: `realpath 超出允许范围: ${realpath}`,
           ...(source ? { source } : {}),
           raw,
@@ -268,7 +364,7 @@ export class DirectoryPolicy {
         return {
           ok: false,
           code: 'git_root_not_allowed',
-          userMessage: '目录不在允许范围内',
+          userMessage: this.buildAllowlistUserMessage(raw, 'not_allowed', allowedDirectories),
           internalDetail: `git 根目录超出允许范围: ${gitRoot}`,
           ...(source ? { source } : {}),
           raw,
