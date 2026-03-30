@@ -236,6 +236,12 @@ function createTray() {
     },
     { type: 'separator' },
     {
+      label: '停止服务',
+      click: () => {
+        stopBackend();
+      },
+    },
+    {
       label: '重启服务',
       click: () => {
         stopBackend();
@@ -246,6 +252,70 @@ function createTray() {
       label: '打开数据目录',
       click: () => {
         shell.openPath(getUserDataPath());
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '重置管理密码',
+      click: async () => {
+        const result = await dialog.showMessageBox(mainWindow!, {
+          type: 'warning',
+          title: '重置管理密码',
+          message: '确定要重置管理密码吗？',
+          detail: '重置后需要重新设置密码才能访问管理面板。\n密码文件位于数据目录中的 config.db。',
+          buttons: ['确定重置', '取消'],
+          defaultId: 1,
+          cancelId: 1,
+        });
+
+        if (result.response === 0) {
+          // 通过 HTTP API 重置密码
+          try {
+            const http = require('http');
+            const req = http.request({
+              hostname: 'localhost',
+              port: ADMIN_PORT,
+              path: '/api/admin/reset-password',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            }, (res: any) => {
+              if (res.statusCode === 200) {
+                dialog.showMessageBox(mainWindow!, {
+                  type: 'info',
+                  title: '密码已重置',
+                  message: '管理密码已重置，请重新打开窗口设置新密码。',
+                  buttons: ['确定'],
+                });
+                mainWindow?.loadURL(`http://localhost:${ADMIN_PORT}`);
+              } else {
+                dialog.showMessageBox(mainWindow!, {
+                  type: 'error',
+                  title: '重置失败',
+                  message: '密码重置失败，请检查服务是否运行。',
+                  buttons: ['确定'],
+                });
+              }
+            });
+            req.on('error', () => {
+              dialog.showMessageBox(mainWindow!, {
+                type: 'error',
+                title: '重置失败',
+                message: '无法连接到服务，请先重启服务后重试。',
+                buttons: ['确定'],
+              });
+            });
+            req.end();
+          } catch {
+            dialog.showMessageBox(mainWindow!, {
+              type: 'error',
+              title: '重置失败',
+              message: '密码重置操作失败。',
+              buttons: ['确定'],
+            });
+          }
+        }
       },
     },
     { type: 'separator' },

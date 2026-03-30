@@ -308,7 +308,8 @@ class ConfigStore {
     const row = this.db
       .prepare<[], { value: string }>(`SELECT value FROM admin_meta WHERE key = 'admin_password'`)
       .get();
-    return row?.value || null;
+    const value = row?.value;
+    return value && value !== '' ? value : null;
   }
 
   /** 设置管理员密码 */

@@ -46,6 +46,18 @@ export function createAdminRoutes(options: AdminRoutesOptions): express.Router {
     });
   });
 
+  // ── POST /api/admin/reset-password（重置密码，用于密码恢复）
+  router.post('/reset-password', (_req, res) => {
+    // 清除密码和密码修改时间
+    configStore.setAdminPassword('');
+    configStore.setPasswordChangedAt('');
+
+    res.json({
+      ok: true,
+      message: '密码已重置，请重新设置密码',
+    });
+  });
+
   // ── PUT /api/admin/password（修改密码或首次设置密码）
   router.put('/password', (req, res) => {
     const { oldPassword, newPassword } = req.body;
@@ -56,7 +68,7 @@ export function createAdminRoutes(options: AdminRoutesOptions): express.Router {
     }
 
     const currentPassword = configStore.getAdminPassword();
-    const isFirstSetup = !currentPassword;
+    const isFirstSetup = !currentPassword || currentPassword === '';
 
     // 首次设置密码：无需验证旧密码
     if (isFirstSetup) {
