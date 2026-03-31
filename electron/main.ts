@@ -13,7 +13,7 @@
 
 import { app, Tray, Menu, nativeImage, shell, dialog } from 'electron';
 import path from 'node:path';
-import { spawn, ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import https from 'node:https';
@@ -425,9 +425,62 @@ function compareVersions(a: string, b: string): number {
 
 // 单实例锁：防止多开
 const gotTheLock = app.requestSingleInstanceLock();
+
+async function killOldBridgeProcesses(): Promise<number[]> {
+  // 使用 process-manager.mjs 终止旧的 Bridge 进程
+  const appPath = isDev ? path.resolve(__dirname, '..') : app.getAppPath();
+  const scriptPath = path.join(appPath, 'scripts', 'process-manager.mjs');
+
+  try {
+    const result = spawnSync(process.execPath, [scriptPath, 'kill-bridge'], {
+      encoding: 'utf-8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (result.status === 0) {
+      console.log('[Electron] 已终止旧 Bridge 进程');
+      return [];
+    }
+  } catch (e) {
+    console.error('[Electron] 终止旧进程失败:', e);
+  }
+  return [];
+}
+
 if (!gotTheLock) {
-  console.log('[Electron] Another instance is already running, quitting...');
-  app.quit();
+  // 检测到另一个实例正在运行
+  console.log('[Electron] Another instance is already running');
+
+  // 弹出对话框提示用户
+  dialog.showMessageBox(null, {
+    type: 'warning',
+    title: '程序已在运行',
+    message: 'OpenCode Bridge 已在运行中，请勿重复启动。',
+    detail: '同时运行多个实例可能导致数据冲突或端口冲突。\n建议：点击托盘图标打开管理面板。',
+    buttons: ['强制终止旧进程并启动', '退出'],
+    defaultId: 1,
+    cancelId: 1,
+  }).then(async (result) => {
+    if (result.response === 0) {
+      // 用户选择强制终止旧进程
+      console.log('[Electron] User chose to kill old process and start');
+
+      // 先释放当前的请求，然后尝试终止旧进程
+      // 注意：此时我们无法真正获取锁，因为旧进程还在运行
+      // 需要先强制终止旧进程
+      await killOldBridgeProcesses();
+
+      // 等待一秒后重新尝试启动
+      setTimeout(() => {
+        // 重新启动当前实例（退出后再启动）
+        app.relaunch();
+        app.exit(0);
+      }, 1000);
+    } else {
+      // 用户选择退出
+      app.exit(0);
+    }
+  });
 } else {
   app.on('second-instance', () => {
     // 当运行第二个实例时，打开管理面板
@@ -457,13 +510,9 @@ if (!gotTheLock) {
     // 创建托盘（始终创建，作为主要交互入口）
     createTray();
 
-    // 开发模式下自动打开管理面板
-    if (isDev) {
-      console.log('[Electron] Development mode, auto-opening admin panel');
-      shell.openExternal(`http://localhost:${ADMIN_PORT}`);
-    } else {
-      console.log('[Electron] Running in background, click tray to open admin panel');
-    }
+    // 无论开发模式还是生产模式，启动时都主动打开管理面板
+    console.log('[Electron] Opening admin panel on startup');
+    shell.openExternal(`http://localhost:${ADMIN_PORT}`);
 
     // 检查更新（非开发模式）
     checkForUpdates();

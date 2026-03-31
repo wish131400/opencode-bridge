@@ -21,6 +21,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { configStore, type BridgeSettings } from '../store/config-store.js';
@@ -637,7 +638,6 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
 
       // 写入 server 配置
       const opencodeConfigDir = path.join(os.homedir(), '.config', 'opencode');
-      const fs = await import('node:fs');
       fs.mkdirSync(opencodeConfigDir, { recursive: true });
 
       const configPath = path.join(opencodeConfigDir, 'opencode.json');
@@ -662,12 +662,27 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
       // visual: false -> opencode serve (后台启动，headless 模式)
       const isWindows = process.platform === 'win32';
       const startCommand = visual ? 'web' : 'serve';
-      spawn('opencode', [startCommand], {
-        detached: true,
-        stdio: 'ignore',
-        shell: isWindows,
-        windowsHide: isWindows,
-      });
+
+      // Windows 下使用 wscript 来无窗口启动，避免弹出 cmd 窗口
+      if (isWindows) {
+        // 创建临时 VBS 脚本来静默启动进程
+        const vbsContent = `
+Set objShell = CreateObject("WScript.Shell")
+objShell.Run "cmd /c opencode ${startCommand}", 0, False
+`.trim();
+        const vbsPath = path.join(os.tmpdir(), 'opencode-start.vbs');
+        fs.writeFileSync(vbsPath, vbsContent, 'utf-8');
+        spawn('wscript', [vbsPath], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+        });
+      } else {
+        spawn('opencode', [startCommand], {
+          detached: true,
+          stdio: 'ignore',
+        });
+      }
 
       res.json({ ok: true, message: visual ? 'OpenCode 已启动（可视化模式）' : 'OpenCode 已启动（后台模式）' });
     } catch (error: any) {
@@ -682,7 +697,9 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
     // 异步终止 OpenCode 进程
     setTimeout(() => {
       try {
-        execSync('node ' + path.join(process.cwd(), 'scripts', 'process-manager.mjs') + ' kill-opencode', {
+        // 使用 __dirname 定位脚本路径，而不是 process.cwd()
+        const scriptPath = path.resolve(__dirname, '../../scripts/process-manager.mjs');
+        execSync(process.execPath + ' ' + scriptPath + ' kill-opencode', {
           encoding: 'utf-8',
           timeout: 10000,
           windowsHide: true,
