@@ -29,16 +29,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADMIN_PORT = parseInt(process.env.ADMIN_PORT ?? '4098', 10);
 const VERSION = pkg.version;
 
+// 开发模式检测（process.resourcesPath 是 Electron 特有属性）
+const isDev = process.env.NODE_ENV === 'development' || !(process as any).resourcesPath;
+
 /**
  * 终止所有旧的 Bridge 进程（防止并行运行）
  * 包括：cmd/git bash/powershell/Electron 等各种方式启动的进程
  */
 function killOldBridgeProcesses(): void {
-  const scriptPath = path.resolve(__dirname, '../../scripts/process-manager.mjs');
+  // 获取脚本路径（兼容开发环境和 Electron 打包环境）
+  let scriptPath: string;
+  if ((process as any).resourcesPath && !isDev) {
+    // Electron 打包后：scripts 在 resources/app/scripts/
+    scriptPath = path.join((process as any).resourcesPath, 'app', 'scripts', 'process-manager.mjs');
+  } else {
+    // 开发环境或非 Electron 环境
+    scriptPath = path.resolve(__dirname, '../../scripts/process-manager.mjs');
+  }
   const isWindows = process.platform === 'win32';
 
   try {
     console.log('[Admin] 检测并终止旧的 Bridge 进程...');
+    console.log('[Admin] 脚本路径:', scriptPath);
     const result = spawnSync(process.execPath, [scriptPath, 'kill-bridge', '--exclude-pid', String(process.pid)], {
       encoding: 'utf-8',
       timeout: 15000,

@@ -428,8 +428,14 @@ const gotTheLock = app.requestSingleInstanceLock();
 
 async function killOldBridgeProcesses(): Promise<number[]> {
   // 使用 process-manager.mjs 终止旧的 Bridge 进程
-  const appPath = isDev ? path.resolve(__dirname, '..') : app.getAppPath();
-  const scriptPath = path.join(appPath, 'scripts', 'process-manager.mjs');
+  let scriptPath: string;
+  if (isDev) {
+    scriptPath = path.resolve(__dirname, '../scripts/process-manager.mjs');
+  } else {
+    // 打包后 scripts 在 resources/app/scripts/
+    scriptPath = path.join(process.resourcesPath, 'app', 'scripts', 'process-manager.mjs');
+  }
+  console.log('[Electron] 脚本路径:', scriptPath);
 
   try {
     const result = spawnSync(process.execPath, [scriptPath, 'kill-bridge'], {
@@ -440,6 +446,9 @@ async function killOldBridgeProcesses(): Promise<number[]> {
     if (result.status === 0) {
       console.log('[Electron] 已终止旧 Bridge 进程');
       return [];
+    }
+    if (result.stderr) {
+      console.error('[Electron] 终止脚本错误:', result.stderr);
     }
   } catch (e) {
     console.error('[Electron] 终止旧进程失败:', e);
