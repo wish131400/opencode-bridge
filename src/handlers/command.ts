@@ -2232,11 +2232,19 @@ export class CommandHandler {
         // 3. Delete Feishu messages
         // Delete AI replies
         for (const msgId of lastInteraction.botFeishuMsgIds) {
-            try { await feishuClient.deleteMessage(msgId); } catch (e) {}
+            try {
+                await feishuClient.deleteMessage(msgId);
+            } catch (e) {
+                console.error('[Undo] 删除飞书AI消息失败:', e);
+            }
         }
         // Delete User message
         if (lastInteraction.userFeishuMsgId) {
-            try { await feishuClient.deleteMessage(lastInteraction.userFeishuMsgId); } catch (e) {}
+            try {
+                await feishuClient.deleteMessage(lastInteraction.userFeishuMsgId);
+            } catch (e) {
+                console.error('[Undo] 删除飞书用户消息失败:', e);
+            }
         }
         
         // 4. Recursive check for question answer

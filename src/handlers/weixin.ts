@@ -906,6 +906,9 @@ export class WeixinHandler {
 
   /**
    * 处理撤回
+   *
+   * 注意：微信个人号 API 不支持撤回已发送的消息
+   * 此命令仅撤回 OpenCode 侧的消息，并发送提示通知
    */
   private async handleUndo(conversationId: string, sender?: PlatformSender): Promise<void> {
     const session = chatSessionStore.getSessionByConversation('weixin', conversationId);
@@ -946,7 +949,7 @@ export class WeixinHandler {
         await opencodeClient.revertMessage(session.sessionId, targetRevertId);
       }
 
-      await sender?.sendText(conversationId, '✅ 已撤回上一轮对话');
+      await sender?.sendText(conversationId, '✅ OpenCode 上一句会话已撤回\n💡 提示：微信不支持撤回平台消息');
     } catch (error) {
       console.error('[Weixin Undo] 执行失败:', error);
       await sender?.sendText(conversationId, '❌ 撤回失败');

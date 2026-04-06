@@ -339,17 +339,12 @@ class WhatsAppBusinessSender implements PlatformSender {
     if (!this.checkConfig()) return false;
 
     try {
-      const response = await fetch(`${this.baseUrl}/${this.phoneId}/messages`, {
-        method: 'POST',
+      // WhatsApp Business API 使用 DELETE 方法删除消息
+      const response = await fetch(`${this.baseUrl}/${this.phoneId}/messages/${messageId}`, {
+        method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          message_id: messageId,
-          status: 'read',
-        }),
       });
 
       const data = await response.json() as { success?: boolean; error?: { message: string } };

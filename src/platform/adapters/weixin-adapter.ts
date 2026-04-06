@@ -301,7 +301,12 @@ export class WeixinAdapter implements PlatformAdapter {
     const msgKey = msg.message_id || `seq_${msg.seq}`;
     const seen = this.seenMessageIds.get(accountId);
     if (seen?.has(msgKey)) return;
-    seen?.add(msgKey);
+    if (seen) {
+      seen.add(msgKey);
+    } else {
+      // accountId未被初始化，创建新的去重集合
+      this.seenMessageIds.set(accountId, new Set([msgKey]));
+    }
 
     // 修剪去重集合
     if (seen && seen.size > DEDUP_MAX) {

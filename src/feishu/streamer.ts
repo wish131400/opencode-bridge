@@ -76,11 +76,11 @@ export class CardStreamer {
 
     const now = Date.now();
     if (now - this.lastUpdate > this.throttleMs) {
-      this.doUpdate();
+      this.doUpdate().catch(err => console.error('[Streamer] 立即更新失败:', err));
     } else {
       this.pendingUpdate = setTimeout(() => {
         this.pendingUpdate = null;
-        this.doUpdate();
+        this.doUpdate().catch(err => console.error('[Streamer] 延迟更新失败:', err));
       }, this.throttleMs);
     }
   }

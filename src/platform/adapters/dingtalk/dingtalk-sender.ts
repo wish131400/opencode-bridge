@@ -383,10 +383,65 @@ export class DingtalkSender {
   }
 
   /**
-   * 删除消息（钉钉不支持）
+   * 撤回消息
    */
-  async deleteMessage(_messageId: string): Promise<boolean> {
-    return false;
+  async deleteMessage(messageId: string): Promise<boolean> {
+    try {
+      // 遍历所有 AI Card 实例，查找对应的会话
+      for (const [conversationId, aiCard] of this.aiCards) {
+        if (aiCard.cardInstanceId === messageId) {
+          const decoded = decodeDingtalkChatId(conversationId);
+          if (!decoded) continue;
+
+          const account = configStore.getDingtalkAccount(decoded.accountId);
+          if (!account) continue;
+
+          const config: DingtalkConfig = {
+            clientId: account.client_id,
+            clientSecret: account.client_secret,
+            endpoint: account.endpoint,
+          };
+
+          // 获取 access_token
+          const token = await getAccessToken(config);
+
+          // 判断是单聊还是群聊
+          const isGroup = isDingtalkGroupChat(decoded.conversationId);
+
+          const body = {
+            robotCode: config.clientId,
+            msgId: messageId,
+          };
+
+          // 群聊需要 openConversationId
+          if (isGroup) {
+            (body as Record<string, unknown>).openConversationId = decoded.conversationId;
+          }
+
+          const endpoint = isGroup
+            ? `${DINGTALK_API}/v1.0/robot/groupMessages/recall`
+            : `${DINGTALK_API}/v1.0/robot/oToMessages/recall`;
+
+          const resp = await httpClient.post(endpoint, body, {
+            headers: {
+              'x-acs-dingtalk-access-token': token,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          // 清理 AI Card 实例
+          this.aiCards.delete(conversationId);
+
+          return resp.status === 200;
+        }
+      }
+
+      console.warn('[钉钉] 未找到要撤回的消息:', messageId);
+      return false;
+    } catch (error: any) {
+      console.error('[钉钉] 撤回消息失败:', error.message);
+      return false;
+    }
   }
 
   /**
