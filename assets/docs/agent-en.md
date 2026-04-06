@@ -1,6 +1,6 @@
 # Agent (Role) Usage Guide
 
-**Version**: v2.9.58
+**Version**: v2.9.59
 **Last Updated**: 2026-03-23
 
 ---

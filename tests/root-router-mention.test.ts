@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FeishuMessageEvent } from '../src/feishu/client.js';
+import { feishuClient } from '../src/feishu/client.js';
 
 const baseEvent: FeishuMessageEvent = {
   messageId: 'msg-1',

@@ -657,6 +657,9 @@ export class WeComHandler {
 
   /**
    * 处理撤回命令
+   *
+   * 注意：企业微信机器人不支持撤回已发送的消息（平台限制）
+   * 此命令仅撤回 OpenCode 侧的消息，并发送提示通知
    */
   private async handleUndo(chatId: string, sender: PlatformSender): Promise<void> {
     const sessionId = chatSessionStore.getSessionIdByConversation('wecom', chatId);
@@ -677,7 +680,7 @@ export class WeComHandler {
 
       const reverted = await opencodeClient.revertMessage(sessionId, lastUserMessage.info.id);
       if (reverted) {
-        await sender.sendText(chatId, '已撤回上一轮对话');
+        await sender.sendText(chatId, '✅ OpenCode 上一句会话已撤回\n💡 提示：企业微信机器人不支持撤回平台消息');
       } else {
         await sender.sendText(chatId, '撤回失败，请稍后重试');
       }

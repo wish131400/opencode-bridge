@@ -13,6 +13,7 @@
  */
 
 import type { FeishuMessageEvent, FeishuCardActionEvent } from '../feishu/client.js';
+import { feishuClient } from '../feishu/client.js';
 import type { PlatformMessageEvent, PlatformActionEvent } from '../platform/types.js';
 import { p2pHandler } from '../handlers/p2p.js';
 import { groupHandler } from '../handlers/group.js';
@@ -94,7 +95,24 @@ export class RootRouter {
     if (!groupConfig.requireMentionInGroup) {
       return false;
     }
-    return !Array.isArray(event.mentions) || event.mentions.length === 0;
+
+    // mentions 数组为空或不存在时跳过
+    if (!Array.isArray(event.mentions) || event.mentions.length === 0) {
+      return true;
+    }
+
+    // 获取机器人 open_id 并检查是否 @ 了机器人自己
+    const botOpenId = feishuClient.getBotOpenId();
+    if (botOpenId) {
+      const isBotMentioned = event.mentions.some(
+        mention => mention.id?.open_id === botOpenId
+      );
+      // 只有 @ 了机器人才处理
+      return !isBotMentioned;
+    }
+
+    // 未获取到机器人 open_id 时，只要有 @ 就处理（向后兼容）
+    return false;
   }
 
   /**

@@ -388,6 +388,9 @@ class FeishuClient extends EventEmitter {
   private readonly HEARTBEAT_INTERVAL_MS = 30000; // 30秒
   private readonly HEARTBEAT_FAILURE_THRESHOLD = 3; // 连续失败3次认为断连
 
+  // 机器人自身信息
+  private botOpenId: string | null = null;
+
   constructor() {
     super();
     this.client = new lark.Client({
@@ -405,9 +408,9 @@ class FeishuClient extends EventEmitter {
     });
   }
 
-  // 获取当前连接状态
-  getConnectionState(): ConnectionState {
-    return this.connectionState;
+  // 获取机器人 open_id
+  getBotOpenId(): string | null {
+    return this.botOpenId;
   }
 
   // 获取上次心跳时间
@@ -468,6 +471,31 @@ class FeishuClient extends EventEmitter {
     }
   }
 
+  // 获取机器人信息
+  private async fetchBotInfo(): Promise<void> {
+    try {
+      // 使用 SDK 的 request 方法调用 bot.v3.info API
+      // SDK 会自动处理 tenant_access_token 的获取和刷新
+      const response = await (this.client as unknown as Record<string, (payload: unknown) => Promise<unknown>>).request(
+        {
+          method: 'GET',
+          url: 'https://open.feishu.cn/open-apis/bot/v3/info',
+        }
+      );
+
+      const data = response as { code?: number; bot?: { open_id?: string } };
+      if (data.code === 0 && data.bot?.open_id) {
+        this.botOpenId = data.bot.open_id;
+        console.log(`[飞书] 获取机器人信息成功: open_id=${this.botOpenId.slice(0, 16)}...`);
+      } else {
+        console.warn('[飞书] 获取机器人信息失败: 响应格式异常', data);
+      }
+    } catch (error) {
+      const formatted = formatError(error);
+      console.warn('[飞书] 获取机器人信息失败:', formatted.message);
+    }
+  }
+
   // 启动长连接
   async start(): Promise<void> {
     console.log('[飞书] 正在启动长连接...');
@@ -503,6 +531,9 @@ class FeishuClient extends EventEmitter {
     await this.wsClient.start({ eventDispatcher: this.eventDispatcher });
     this.connectionState = 'connected';
     console.log('[飞书] 长连接已建立');
+
+    // 获取机器人自身信息
+    await this.fetchBotInfo();
 
     // 启动心跳检测
     this.startHeartbeat();
