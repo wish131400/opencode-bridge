@@ -476,7 +476,7 @@ function handleSelectionChange(rows: OpenCodeSession[]) {
   selectedRows.value = rows
 }
 
-function openBindDialog(binding?: undefined, sessionId?: string) {
+function openBindDialog(_binding?: undefined, sessionId?: string) {
   bindForm.value = {
     platform: '',
     conversationId: '',

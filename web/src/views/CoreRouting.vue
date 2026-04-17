@@ -327,6 +327,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { BridgeSettings } from '../api'
 import { useConfigStore } from '../stores/config'
 import ConfigActionBar from '../components/ConfigActionBar.vue'
 
@@ -427,7 +428,7 @@ async function handleSave() {
   }
 }
 
-function handleImportConfig(config: typeof form) {
+function handleImportConfig(config: BridgeSettings) {
   Object.assign(form, config)
   // 同步开关状态
   enableManualBind.value = form.ENABLE_MANUAL_SESSION_BIND !== 'false'

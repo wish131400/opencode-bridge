@@ -34,6 +34,7 @@ http.interceptors.response.use(
 )
 
 export interface BridgeSettings {
+  FEISHU_ENABLED?: string
   FEISHU_APP_ID?: string
   FEISHU_APP_SECRET?: string
   FEISHU_ENCRYPT_KEY?: string
@@ -200,7 +201,7 @@ export interface SessionInfo {
   conversationId?: string
   title: string
   userId?: string
-  platform?: 'feishu' | 'discord' | 'wecom' | 'telegram' | 'qq' | 'whatsapp'
+  platform?: 'feishu' | 'discord' | 'wecom' | 'telegram' | 'qq' | 'whatsapp' | 'weixin'
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -340,6 +341,285 @@ export interface PlatformChat {
   isBound: boolean
   boundSessionId?: string
   boundSessionTitle?: string
+}
+
+export interface ChatSessionSummary {
+  id: string
+  title: string
+  projectId: string
+  directory: string
+  parentId?: string
+  createdAt: number
+  updatedAt: number
+  version: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+  }
+  share?: {
+    url: string
+  }
+}
+
+export interface ChatWorkspaceOption {
+  id: string
+  label: string
+  directory: string
+  source: 'project' | 'default' | 'allowlist'
+}
+
+export interface ChatAgentInfo {
+  name: string
+  description?: string
+  mode?: 'primary' | 'subagent' | 'all'
+  hidden?: boolean
+  builtIn?: boolean
+  native?: boolean
+}
+
+export interface ChatCommandInfo {
+  name: string
+  description?: string
+  agent?: string
+  model?: string
+  source?: 'command' | 'mcp' | 'skill' | 'bridge-doc'
+  template: string
+  subtask?: boolean
+  hints: string[]
+}
+
+export interface ChatModelOption {
+  id: string
+  name: string
+  variants: string[]
+}
+
+export interface ChatModelProviderInfo {
+  id: string
+  name: string
+  models: ChatModelOption[]
+}
+
+export interface ChatTokenUsage {
+  input: number
+  output: number
+  reasoning: number
+  cacheRead: number
+  cacheWrite: number
+  cost?: number
+}
+
+export interface ChatTodoItem {
+  id: string
+  content: string
+  status: string
+  priority?: string
+}
+
+export interface ChatPermissionRequest {
+  id: string
+  sessionId: string
+  tool: string
+  description: string
+  risk?: string
+  messageId?: string
+  callId?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ChatModelRef {
+  providerId: string
+  modelId: string
+}
+
+export interface ChatMessageMeta {
+  id: string
+  role: 'user' | 'assistant'
+  createdAt: number
+  model?: ChatModelRef
+  agent?: string
+}
+
+export type ChatMessagePart =
+  | {
+      id: string
+      messageID: string
+      sessionID: string
+      type: 'text'
+      text: string
+    }
+  | {
+      id: string
+      messageID: string
+      sessionID: string
+      type: 'reasoning'
+      text: string
+    }
+  | {
+      id: string
+      messageID: string
+      sessionID: string
+      type: 'tool'
+      callID: string
+      tool: string
+      state:
+        | { status: 'pending'; input: Record<string, unknown>; raw?: string }
+        | { status: 'running'; input: Record<string, unknown>; title?: string; metadata?: Record<string, unknown> }
+        | {
+            status: 'completed'
+            input: Record<string, unknown>
+            output: string
+            title: string
+            metadata?: Record<string, unknown>
+          }
+        | {
+            status: 'error'
+            input: Record<string, unknown>
+            error: string
+            metadata?: Record<string, unknown>
+          }
+    }
+  | {
+      id: string
+      messageID: string
+      sessionID: string
+      type: 'file' | 'subtask' | 'step-start' | 'step-finish' | 'snapshot' | 'patch' | 'agent' | 'retry' | 'compaction'
+      [key: string]: unknown
+    }
+
+export interface ChatHistoryMessage {
+  info: {
+    id: string
+    sessionID: string
+    role: 'user' | 'assistant'
+    time: {
+      created: number
+      completed?: number
+    }
+    error?: {
+      data?: {
+        message?: string
+      }
+    }
+    finish?: string
+    agent?: string
+    mode?: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
+    providerID?: string
+    modelID?: string
+    cost?: number
+    tokens?: {
+      input: number
+      output: number
+      reasoning: number
+      cache: {
+        read: number
+        write: number
+      }
+    }
+  }
+  parts: ChatMessagePart[]
+}
+
+export interface ChatMessagePage {
+  messages: ChatHistoryMessage[]
+  tasks: ChatTodoItem[]
+  total: number
+  hasMore: boolean
+  nextCursor: string | null
+}
+
+export type ChatEvent =
+  | { type: 'message_start'; msg: ChatMessageMeta }
+  | { type: 'text_delta'; msgId: string; text: string }
+  | { type: 'reasoning_delta'; msgId: string; text: string }
+  | {
+      type: 'tool_start'
+      msgId: string
+      tool: { id: string; callId: string; name: string; input: unknown; title?: string }
+    }
+  | { type: 'tool_delta'; msgId: string; toolId: string; output: string }
+  | {
+      type: 'tool_end'
+      msgId: string
+      toolId: string
+      callId: string
+      name: string
+      result: string
+      isError: boolean
+      title?: string
+      durationMs?: number
+    }
+  | { type: 'message_end'; msgId: string; usage?: ChatTokenUsage; finish?: string; error?: string }
+  | { type: 'permission_ask'; req: ChatPermissionRequest }
+  | { type: 'permission_resolved'; reqId: string; decision: 'allow' | 'reject' | 'always' }
+  | { type: 'task_update'; todos: ChatTodoItem[] }
+  | { type: 'session_idle'; sessionId: string }
+  | { type: 'session_status'; sessionId: string; status: string }
+  | { type: 'error'; message: string }
+  | { type: 'keepalive' }
+
+export interface WorkspaceGitFileStatus {
+  path: string
+  index: string
+  workingTree: string
+  staged: boolean
+  modified: boolean
+  untracked: boolean
+  conflicted: boolean
+}
+
+export interface WorkspaceGitStatus {
+  directory: string
+  repositoryRoot: string
+  branch: string
+  tracking?: string
+  ahead: number
+  behind: number
+  clean: boolean
+  detached: boolean
+  branches: string[]
+  counts: {
+    staged: number
+    modified: number
+    untracked: number
+    conflicted: number
+  }
+  files: WorkspaceGitFileStatus[]
+  lastCommit?: {
+    hash: string
+    message: string
+    authorName: string
+    date: string
+  }
+}
+
+export interface WorkspaceFileEntry {
+  name: string
+  path: string
+  type: 'directory' | 'file'
+  size: number
+  mtimeMs: number
+}
+
+export interface WorkspaceFileTree {
+  directory: string
+  path: string
+  entries: WorkspaceFileEntry[]
+  truncated: boolean
+}
+
+export interface WorkspaceFileContent {
+  directory: string
+  path: string
+  size: number
+  truncated: boolean
+  isBinary: boolean
+  content: string
 }
 
 export const weixinApi = {
@@ -485,6 +765,7 @@ export const configApi = {
     telegram: SessionInfo[]
     qq: SessionInfo[]
     whatsapp: SessionInfo[]
+    weixin: SessionInfo[]
   }> {
     const res = await http.get<{
       feishu: SessionInfo[]
@@ -493,6 +774,7 @@ export const configApi = {
       telegram: SessionInfo[]
       qq: SessionInfo[]
       whatsapp: SessionInfo[]
+      weixin: SessionInfo[]
     }>('/sessions')
     return res.data
   },
@@ -696,6 +978,169 @@ export const sessionApi = {
 
   async getPlatformChats(platform: string): Promise<{ chats: PlatformChat[]; platform: string }> {
     const res = await http.get<{ chats: PlatformChat[]; platform: string }>(`/sessions/platform-chats/${platform}`)
+    return res.data
+  },
+}
+
+export const chatApi = {
+  async listSessions(): Promise<ChatSessionSummary[]> {
+    const res = await http.get<{ sessions: ChatSessionSummary[] }>('/chat/sessions')
+    return res.data.sessions
+  },
+
+  async createSession(payload?: { title?: string; directory?: string }): Promise<ChatSessionSummary> {
+    const res = await http.post<{ session: ChatSessionSummary }>('/chat/sessions', payload)
+    return res.data.session
+  },
+
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    await http.patch(`/chat/sessions/${encodeURIComponent(sessionId)}`, { title })
+  },
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await http.delete(`/chat/sessions/${encodeURIComponent(sessionId)}`)
+  },
+
+  async getMessages(sessionId: string, payload?: {
+    limit?: number
+    cursor?: string | null
+  }): Promise<ChatMessagePage> {
+    const res = await http.get<ChatMessagePage>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      params: {
+        limit: payload?.limit,
+        cursor: payload?.cursor ?? undefined,
+      },
+    })
+    return {
+      messages: Array.isArray(res.data.messages) ? res.data.messages : [],
+      tasks: Array.isArray(res.data.tasks) ? res.data.tasks : [],
+      total: typeof res.data.total === 'number' ? res.data.total : 0,
+      hasMore: Boolean(res.data.hasMore),
+      nextCursor: typeof res.data.nextCursor === 'string' ? res.data.nextCursor : null,
+    }
+  },
+
+  async listWorkspaces(): Promise<ChatWorkspaceOption[]> {
+    const res = await http.get<{ workspaces: ChatWorkspaceOption[] }>('/chat/workspaces')
+    return Array.isArray(res.data.workspaces) ? res.data.workspaces : []
+  },
+
+  async listAgents(): Promise<ChatAgentInfo[]> {
+    const res = await http.get<{ agents: ChatAgentInfo[] }>('/chat/agents')
+    return Array.isArray(res.data.agents) ? res.data.agents : []
+  },
+
+  async listModels(): Promise<ChatModelProviderInfo[]> {
+    const res = await http.get<{ providers: ChatModelProviderInfo[] }>('/chat/models')
+    return Array.isArray(res.data.providers) ? res.data.providers : []
+  },
+
+  async listCommands(): Promise<ChatCommandInfo[]> {
+    const res = await http.get<{ commands: ChatCommandInfo[] }>('/chat/commands')
+    return Array.isArray(res.data.commands) ? res.data.commands : []
+  },
+
+  async sendPrompt(payload: {
+    sessionId: string
+    text: string
+    providerId?: string
+    modelId?: string
+    agent?: string
+    variant?: string
+    directory?: string
+  }): Promise<void> {
+    await http.post('/chat/prompt', {
+      sessionId: payload.sessionId,
+      parts: [{ type: 'text', text: payload.text }],
+      providerId: payload.providerId,
+      modelId: payload.modelId,
+      agent: payload.agent,
+      variant: payload.variant,
+      directory: payload.directory,
+    })
+  },
+
+  async respondPermission(payload: {
+    permissionId: string
+    sessionId: string
+    decision: 'allow' | 'reject' | 'always'
+  }): Promise<void> {
+    await http.post(`/chat/permissions/${encodeURIComponent(payload.permissionId)}`, {
+      sessionId: payload.sessionId,
+      decision: payload.decision,
+    })
+  },
+
+  async abortSession(sessionId: string): Promise<void> {
+    await http.post(`/chat/sessions/${encodeURIComponent(sessionId)}/abort`)
+  },
+
+  async revertSession(sessionId: string, messageId: string): Promise<void> {
+    await http.post(`/chat/sessions/${encodeURIComponent(sessionId)}/revert`, { messageId })
+  },
+}
+
+export const workspaceApi = {
+  async getGitStatus(directory: string): Promise<WorkspaceGitStatus> {
+    const res = await http.get<WorkspaceGitStatus>('/workspace/git/status', {
+      params: { directory },
+    })
+    return res.data
+  },
+
+  async getGitDiff(payload: {
+    directory: string
+    filePath?: string
+    staged?: boolean
+  }): Promise<{ directory: string; filePath?: string; staged: boolean; diff: string }> {
+    const res = await http.get<{ directory: string; filePath?: string; staged: boolean; diff: string }>('/workspace/git/diff', {
+      params: {
+        directory: payload.directory,
+        filePath: payload.filePath,
+        staged: payload.staged,
+      },
+    })
+    return res.data
+  },
+
+  async commitAll(directory: string, message: string): Promise<void> {
+    await http.post('/workspace/git/commit', { directory, message })
+  },
+
+  async pull(directory: string): Promise<void> {
+    await http.post('/workspace/git/pull', { directory })
+  },
+
+  async push(directory: string): Promise<void> {
+    await http.post('/workspace/git/push', { directory })
+  },
+
+  async checkout(directory: string, branch: string): Promise<void> {
+    await http.post('/workspace/git/checkout', { directory, branch })
+  },
+
+  async listFiles(payload: {
+    directory: string
+    path?: string
+    limit?: number
+  }): Promise<WorkspaceFileTree> {
+    const res = await http.get<WorkspaceFileTree>('/workspace/files/tree', {
+      params: {
+        directory: payload.directory,
+        path: payload.path,
+        limit: payload.limit,
+      },
+    })
+    return res.data
+  },
+
+  async readFile(directory: string, filePath: string): Promise<WorkspaceFileContent> {
+    const res = await http.get<WorkspaceFileContent>('/workspace/files/content', {
+      params: {
+        directory,
+        path: filePath,
+      },
+    })
     return res.data
   },
 }

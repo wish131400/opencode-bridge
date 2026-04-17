@@ -4,12 +4,16 @@
     <el-aside width="220px" class="sidebar">
       <div class="logo">
         <el-icon size="24"><Monitor /></el-icon>
-        <span>Bridge 配置中心</span>
+        <span>Bridge</span>
       </div>
-      <el-menu :router="true" :default-active="route.path" class="nav-menu">
+      <el-menu :router="true" :default-active="activeMenu" class="nav-menu">
         <el-menu-item index="/dashboard">
           <el-icon><DataAnalysis /></el-icon>
           <span>系统状态</span>
+        </el-menu-item>
+        <el-menu-item index="/chat">
+          <el-icon><ChatLineSquare /></el-icon>
+          <span>AI 工作区</span>
         </el-menu-item>
         <el-menu-item index="/platforms">
           <el-icon><ChatDotRound /></el-icon>
@@ -77,7 +81,7 @@
     </el-aside>
 
     <!-- 内容区 -->
-    <el-main class="main-content">
+    <el-main :class="['main-content', { 'main-content--workspace': isChatRoute }]">
       <!-- 待重启提示横幅 -->
       <el-alert
         v-if="store.pendingRestart"
@@ -115,10 +119,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataAnalysis, Loading, Document, SwitchButton, Key, Link } from '@element-plus/icons-vue'
+import { DataAnalysis, Loading, Document, SwitchButton, Key, Link, ChatLineSquare, ChatDotRound, Connection, Warning, Setting, Timer, Monitor } from '@element-plus/icons-vue'
 import { useConfigStore } from './stores/config'
 import { configApi } from './api/index'
 import type { ServiceStatus } from './api/index'
@@ -136,6 +140,9 @@ const errorLogCount = ref(0)
 const loginTimeoutMinutes = ref(0)
 const lastActivityTime = ref(Date.now())
 let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
+
+const isChatRoute = computed(() => route.path === '/chat' || route.path.startsWith('/chat/'))
+const activeMenu = computed(() => isChatRoute.value ? '/chat' : route.path)
 
 async function loadAppData() {
   if (route.path === '/login' || !localStorage.getItem('admin_token')) return
@@ -304,6 +311,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   padding: 24px;
   overflow-y: auto;
   background: #f5f7fa;
+}
+
+.main-content--workspace {
+  padding: 0;
+  overflow: hidden;
 }
 
 .restart-banner { margin-bottom: 20px; }

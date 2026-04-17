@@ -124,6 +124,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { BridgeSettings } from '../api'
 import { useConfigStore } from '../stores/config'
 import ConfigActionBar from '../components/ConfigActionBar.vue'
 
@@ -209,7 +210,7 @@ async function handleSave() {
   }
 }
 
-function handleImportConfig(config: typeof form) {
+function handleImportConfig(config: BridgeSettings) {
   Object.assign(form, config)
   // 同步状态
   portNum.value = parseInt(form.OPENCODE_PORT) || 4096

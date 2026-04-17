@@ -4,7 +4,7 @@
       <template #header>
         <div class="login-header">
           <el-icon size="32" color="#409eff"><Monitor /></el-icon>
-          <h2>OpenCode Bridge 配置中心</h2>
+          <h2>Bridge</h2>
         </div>
       </template>
 

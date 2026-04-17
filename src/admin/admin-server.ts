@@ -29,6 +29,9 @@ import { logStore } from '../store/log-store.js';
 import type { RuntimeCronManager } from '../reliability/runtime-cron.js';
 import type { BridgeManager } from './bridge-manager.js';
 import { createSessionRoutes } from './routes/session.js';
+import { registerWorkspaceGitRoutes } from './routes/workspace-git.js';
+import { registerWorkspaceFilesRoutes } from './routes/workspace-files.js';
+import { registerChatRoutes } from './routes/chat.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -180,6 +183,10 @@ export function createAdminServer(options: AdminServerOptions): { start: () => v
 
   const api = express.Router();
   api.use(authMiddleware);
+
+  // ── Register Chat Routes (Phase A: Native Chat UI)
+  // These routes use their own auth middleware (chatAuthMiddleware), not admin password
+  registerChatRoutes(app);
 
   // ── GET /api/config
   api.get('/config', (_req, res) => {
@@ -1013,6 +1020,8 @@ objShell.Run "cmd /c opencode serve", 0, False
 
   // ── Session 管理路由
   api.use('/sessions', createSessionRoutes());
+  registerWorkspaceGitRoutes(api);
+  registerWorkspaceFilesRoutes(api);
 
   // ── POST /api/admin/shutdown（终止服务）
   api.post('/admin/shutdown', async (_req, res) => {

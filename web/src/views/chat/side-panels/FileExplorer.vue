@@ -1,0 +1,408 @@
+<template>
+  <div class="workspace-tool">
+    <div class="tool-header">
+      <div>
+        <h4>文件浏览</h4>
+        <p>按当前工作目录浏览文件树，并支持直接预览文本文件。</p>
+      </div>
+
+      <el-button
+        size="small"
+        plain
+        :loading="loading && !listing"
+        @click="refreshCurrent"
+      >
+        刷新
+      </el-button>
+    </div>
+
+    <div v-if="!directory" class="placeholder">
+      当前没有工作目录。先绑定会话目录，或在配置里设置 `DEFAULT_WORK_DIRECTORY`。
+    </div>
+
+    <template v-else>
+      <div class="pathbar">
+        <button
+          type="button"
+          :class="['crumb', { 'crumb--active': !currentPath }]"
+          @click="loadDirectory('')"
+        >
+          root
+        </button>
+
+        <button
+          v-for="(segment, index) in breadcrumbs"
+          :key="`${index}-${segment}`"
+          type="button"
+          :class="['crumb', { 'crumb--active': index === breadcrumbs.length - 1 }]"
+          @click="jumpTo(index)"
+        >
+          / {{ segment }}
+        </button>
+
+        <el-button
+          text
+          size="small"
+          :disabled="!currentPath"
+          @click="goUp"
+        >
+          上一级
+        </el-button>
+      </div>
+
+      <div v-if="error" class="placeholder placeholder--error">
+        {{ error }}
+      </div>
+
+      <div v-else class="browser-body">
+        <div class="entry-section">
+          <div class="section-head">
+            <h5>目录项</h5>
+            <span>{{ listing?.entries.length || 0 }}</span>
+          </div>
+
+          <div v-if="loading && !listing" class="placeholder">
+            正在读取目录...
+          </div>
+
+          <div v-else-if="listing && listing.entries.length === 0" class="placeholder">
+            当前目录为空。
+          </div>
+
+          <div v-else class="entry-list">
+            <button
+              v-for="entry in listing?.entries || []"
+              :key="entry.path"
+              type="button"
+              :class="['entry-item', { 'entry-item--active': selectedFilePath === entry.path }]"
+              @click="entry.type === 'directory' ? openDirectory(entry.path) : openFile(entry)"
+            >
+              <span class="entry-type">{{ entry.type === 'directory' ? 'DIR' : 'FILE' }}</span>
+              <span class="entry-name">{{ entry.name }}</span>
+              <span class="entry-meta">{{ formatEntryMeta(entry) }}</span>
+            </button>
+          </div>
+
+          <div v-if="listing?.truncated" class="placeholder">
+            当前目录项过多，仅显示前 {{ listing.entries.length }} 条。
+          </div>
+        </div>
+
+        <div class="preview-section">
+          <div class="section-head">
+            <h5>文件预览</h5>
+            <span>{{ preview?.path || selectedFilePath || '未选择' }}</span>
+          </div>
+
+          <div v-if="previewLoading" class="placeholder">
+            正在读取文件内容...
+          </div>
+
+          <div v-else-if="preview?.isBinary" class="placeholder">
+            二进制文件暂不提供文本预览。
+          </div>
+
+          <template v-else-if="preview">
+            <CodeBlock
+              :code="preview.content"
+              :language="detectLanguage(preview.path)"
+              :title="preview.path"
+            />
+            <p v-if="preview.truncated" class="preview-note">
+              文件较大，当前仅预览前 120 KB 内容。
+            </p>
+          </template>
+
+          <div v-else class="placeholder">
+            选择一个文件查看内容。
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import CodeBlock from '../../../components/ai-elements/CodeBlock.vue'
+import { workspaceApi, type WorkspaceFileContent, type WorkspaceFileEntry, type WorkspaceFileTree } from '../../../api'
+
+const props = defineProps<{
+  directory?: string
+}>()
+
+const listing = ref<WorkspaceFileTree | null>(null)
+const preview = ref<WorkspaceFileContent | null>(null)
+const selectedFilePath = ref('')
+const loading = ref(false)
+const previewLoading = ref(false)
+const error = ref<string | null>(null)
+
+let listVersion = 0
+let previewVersion = 0
+
+const currentPath = computed(() => listing.value?.path || '')
+const breadcrumbs = computed(() => currentPath.value.split('/').filter(Boolean))
+
+watch(
+  () => props.directory,
+  async directory => {
+    listVersion += 1
+    previewVersion += 1
+    listing.value = null
+    preview.value = null
+    selectedFilePath.value = ''
+    error.value = null
+
+    if (!directory) return
+    await loadDirectory('')
+  },
+  { immediate: true }
+)
+
+async function loadDirectory(nextPath = ''): Promise<void> {
+  if (!props.directory) return
+  const currentVersion = ++listVersion
+  loading.value = true
+  error.value = null
+
+  try {
+    const nextListing = await workspaceApi.listFiles({
+      directory: props.directory,
+      path: nextPath,
+      limit: 250,
+    })
+    if (currentVersion !== listVersion) return
+    listing.value = nextListing
+
+    if (selectedFilePath.value) {
+      const exists = nextListing.entries.some(entry => entry.path === selectedFilePath.value)
+      if (!exists) {
+        preview.value = null
+        selectedFilePath.value = ''
+      }
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '读取目录失败'
+  } finally {
+    if (currentVersion === listVersion) {
+      loading.value = false
+    }
+  }
+}
+
+async function refreshCurrent(): Promise<void> {
+  await loadDirectory(currentPath.value)
+  if (selectedFilePath.value) {
+    const entry = listing.value?.entries.find(item => item.path === selectedFilePath.value)
+    if (entry && entry.type === 'file') {
+      await openFile(entry, false)
+    }
+  }
+  ElMessage.success('目录内容已刷新')
+}
+
+async function openDirectory(nextPath: string): Promise<void> {
+  preview.value = null
+  selectedFilePath.value = ''
+  await loadDirectory(nextPath)
+}
+
+async function openFile(entry: WorkspaceFileEntry, announce = true): Promise<void> {
+  if (!props.directory) return
+  selectedFilePath.value = entry.path
+  const currentVersion = ++previewVersion
+  previewLoading.value = true
+
+  try {
+    const nextPreview = await workspaceApi.readFile(props.directory, entry.path)
+    if (currentVersion !== previewVersion) return
+    preview.value = nextPreview
+    if (announce) {
+      ElMessage.success(`已打开 ${entry.name}`)
+    }
+  } catch (err) {
+    if (currentVersion !== previewVersion) return
+    ElMessage.error(err instanceof Error ? err.message : '读取文件失败')
+  } finally {
+    if (currentVersion === previewVersion) {
+      previewLoading.value = false
+    }
+  }
+}
+
+async function goUp(): Promise<void> {
+  if (!currentPath.value) return
+  const segments = currentPath.value.split('/').filter(Boolean)
+  segments.pop()
+  await loadDirectory(segments.join('/'))
+}
+
+async function jumpTo(index: number): Promise<void> {
+  const target = breadcrumbs.value.slice(0, index + 1).join('/')
+  await loadDirectory(target)
+}
+
+function formatEntryMeta(entry: WorkspaceFileEntry): string {
+  if (entry.type === 'directory') {
+    return '目录'
+  }
+
+  const size = entry.size
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function detectLanguage(filePath: string): string {
+  const lower = filePath.toLowerCase()
+  if (lower.endsWith('.tsx')) return 'tsx'
+  if (lower.endsWith('.ts')) return 'typescript'
+  if (lower.endsWith('.jsx')) return 'jsx'
+  if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return 'javascript'
+  if (lower.endsWith('.vue')) return 'vue'
+  if (lower.endsWith('.json')) return 'json'
+  if (lower.endsWith('.yml') || lower.endsWith('.yaml')) return 'yaml'
+  if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
+  if (lower.endsWith('.css')) return 'css'
+  if (lower.endsWith('.html')) return 'html'
+  if (lower.endsWith('.sql')) return 'sql'
+  if (lower.endsWith('.sh') || lower.endsWith('.bash')) return 'bash'
+  return 'plaintext'
+}
+</script>
+
+<style scoped>
+.workspace-tool {
+  display: grid;
+  gap: 12px;
+}
+
+.tool-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-header h4,
+.section-head h5 {
+  color: #10223d;
+}
+
+.tool-header p {
+  margin-top: 6px;
+  color: #6b7280;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.placeholder {
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #6b7280;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.placeholder--error {
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.pathbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.crumb {
+  border: 0;
+  border: 1px solid #d1d5db;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #4b5b73;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.crumb--active {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.browser-body {
+  display: grid;
+  gap: 16px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head span {
+  color: #66758d;
+  font-size: 12px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.entry-list {
+  display: grid;
+  gap: 8px;
+}
+
+.entry-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.entry-item--active,
+.entry-item:hover {
+  border-color: #cbd5e1;
+}
+
+.entry-type {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.entry-name {
+  color: #10223d;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.entry-meta {
+  color: #7b8ba4;
+  font-size: 12px;
+}
+
+.preview-note {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+}
+</style>

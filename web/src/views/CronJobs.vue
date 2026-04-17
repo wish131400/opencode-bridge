@@ -175,7 +175,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus } from '@element-plus/icons-vue'
 import { useConfigStore } from '../stores/config'
 import type { CronJob, CreateCronJobInput } from '../api/index'
@@ -254,8 +254,9 @@ async function handleToggle(row: CronJob) {
 }
 
 async function handleDelete(row: CronJob) {
-  await ElMessage.confirm(
+  await ElMessageBox.confirm(
     `确认删除任务「${row.name || row.id}」？此操作不可撤销。`,
+    '确认删除',
     { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
   )
   deleting.value = row.id
