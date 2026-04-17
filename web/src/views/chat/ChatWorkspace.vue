@@ -2,6 +2,10 @@
   <div class="workspace-shell">
     <section class="workspace-topbar">
       <div class="topbar-left">
+        <el-button type="primary" @click="openCreateDialog()">新建项目</el-button>
+      </div>
+
+      <div class="topbar-right">
         <button
           v-for="panel in panelDefinitions"
           :key="panel.key"
@@ -14,39 +18,9 @@
           <span>{{ panel.title }}</span>
         </button>
       </div>
-
-      <div class="topbar-right">
-        <el-button type="primary" @click="openCreateDialog()">新建项目</el-button>
-      </div>
     </section>
 
     <div class="chat-workspace">
-      <template v-for="panel in visiblePanels" :key="panel.key">
-        <aside
-          class="workspace-column workspace-column--panel"
-          :style="panelColumnStyle(panel.key)"
-        >
-          <GitPanel
-            v-if="panel.key === 'git'"
-            :directory="workspaceDirectory || undefined"
-          />
-          <FileExplorer
-            v-else-if="panel.key === 'files'"
-            :directory="workspaceDirectory || undefined"
-          />
-          <TaskPanel
-            v-else-if="panel.key === 'board'"
-            :tasks="tasks"
-          />
-          <TerminalPanel
-            v-else
-            :directory="workspaceDirectory || undefined"
-          />
-        </aside>
-
-        <div class="resize-handle" @mousedown.prevent="startResize(panel.key, $event)" />
-      </template>
-
       <SessionSidebar
         ref="sessionSidebarRef"
         class="workspace-column workspace-column--sidebar"
@@ -96,6 +70,32 @@
         @update:variant="updateActiveVariant($event)"
         @update:agent-name="updateActiveAgentName($event)"
       />
+
+      <template v-for="panel in visiblePanels" :key="panel.key">
+        <div class="resize-handle" @mousedown.prevent="startResize(panel.key, $event)" />
+
+        <aside
+          class="workspace-column workspace-column--panel"
+          :style="panelColumnStyle(panel.key)"
+        >
+          <GitPanel
+            v-if="panel.key === 'git'"
+            :directory="workspaceDirectory || undefined"
+          />
+          <FileExplorer
+            v-else-if="panel.key === 'files'"
+            :directory="workspaceDirectory || undefined"
+          />
+          <TaskPanel
+            v-else-if="panel.key === 'board'"
+            :tasks="tasks"
+          />
+          <TerminalPanel
+            v-else
+            :directory="workspaceDirectory || undefined"
+          />
+        </aside>
+      </template>
     </div>
 
     <PermissionDialog
@@ -593,13 +593,15 @@ function startResize(target: ResizeTarget, event: MouseEvent): void {
 function handleResizeMove(event: MouseEvent): void {
   if (!activeResize) return
   const delta = event.clientX - activeResize.startX
-  const nextWidth = activeResize.initialWidth + delta
 
   if (activeResize.target === 'sidebar') {
+    const nextWidth = activeResize.initialWidth + delta
     sidebarWidth.value = clamp(nextWidth, 240, 460)
     return
   }
 
+  // Panels are on right side, dragging left increases width
+  const nextWidth = activeResize.initialWidth - delta
   panelWidths.value = {
     ...panelWidths.value,
     [activeResize.target]: clamp(nextWidth, 280, 640),
@@ -990,11 +992,21 @@ async function handlePermissionDecision(decision: 'allow' | 'reject' | 'always')
   background: #ffffff;
 }
 
-.workspace-column--panel,
 .workspace-column--sidebar {
   flex: 0 0 auto;
   overflow: hidden;
   border-right: 1px solid #e5e7eb;
+}
+
+.workspace-column--panel {
+  flex: 0 0 auto;
+  overflow: hidden;
+  overflow-y: hidden;
+  border-left: 1px solid #e5e7eb;
+}
+
+.workspace-column--panel :deep(*) {
+  overflow-y: hidden !important;
 }
 
 .workspace-column--chat {
@@ -1103,7 +1115,7 @@ async function handlePermissionDecision(decision: 'allow' | 'reject' | 'always')
 .chat-workspace :deep(.mode-switch),
 .chat-workspace :deep(.task-item),
 .chat-workspace :deep(.state-card) {
-  border-radius: 0 !important;
+  border-radius: 4px !important;
   box-shadow: none !important;
   background-image: none !important;
   backdrop-filter: none !important;
@@ -1122,18 +1134,18 @@ async function handlePermissionDecision(decision: 'allow' | 'reject' | 'always')
 }
 
 .chat-workspace :deep(.message-bubble) {
-  border: 1px solid #e5e7eb;
-  background: #ffffff !important;
+  border: none;
+  background: transparent !important;
 }
 
 .chat-workspace :deep(.message-bubble--user) {
-  background: #fafafa !important;
+  background: transparent !important;
 }
 
 .chat-workspace :deep(.el-select__wrapper),
 .chat-workspace :deep(.el-textarea__inner),
 .chat-workspace :deep(.el-input__wrapper) {
-  border-radius: 0 !important;
+  border-radius: 4px !important;
   box-shadow: inset 0 0 0 1px #d1d5db !important;
 }
 

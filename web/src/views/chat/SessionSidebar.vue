@@ -1,11 +1,8 @@
 <template>
   <aside class="session-sidebar">
     <section class="sidebar-head">
-      <div>
-        <div class="eyebrow">Bridge</div>
-        <h2>会话</h2>
-      </div>
-      <el-button type="primary" @click="$emit('create')">新建项目</el-button>
+      <h2>会话</h2>
+      <el-button type="primary" size="small" @click="$emit('create')">+ 新建</el-button>
     </section>
 
     <el-input
@@ -13,14 +10,13 @@
       v-model="keyword"
       class="search"
       clearable
-      placeholder="搜索会话标题或目录"
+      size="small"
+      placeholder="搜索  (Ctrl+K)"
     >
       <template #prefix>
         <el-icon><Search /></el-icon>
       </template>
     </el-input>
-
-    <div class="search-hint">`Ctrl/Cmd + K` 聚焦搜索</div>
 
     <div class="session-list">
       <div v-if="loading" class="loading-card">
@@ -251,7 +247,7 @@ defineExpose({
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   background: #ffffff;
   color: #111827;
   border-right: 1px solid #e5e7eb;
@@ -261,41 +257,24 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .sidebar-head h2 {
-  margin-top: 4px;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.eyebrow {
-  color: #6b7280;
-}
-
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .search {
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .search :deep(.el-input__wrapper) {
-  border-radius: 0;
+  border-radius: 4px;
   box-shadow: inset 0 0 0 1px #d1d5db;
-}
-
-.search-hint {
-  padding: 0 12px 4px;
-  font-size: 11px;
-  color: #6b7280;
 }
 
 .session-list {
@@ -316,8 +295,9 @@ defineExpose({
 .empty-card {
   display: grid;
   gap: 10px;
-  color: #4b5563;
+  color: #9ca3af;
   line-height: 1.6;
+  font-size: 13px;
 }
 
 .session-list :deep(.tree-node) {

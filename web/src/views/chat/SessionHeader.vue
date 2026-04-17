@@ -1,19 +1,11 @@
 <template>
   <header class="session-header">
     <div class="session-meta">
-      <div class="eyebrow">AI 工作区</div>
-      <h1>{{ session?.title || '新对话' }}</h1>
-      <p>
-        {{ session?.directory || '当前会话还未绑定目录，直接发送问题即可开始。' }}
-      </p>
-      <div class="status-line">
-        <span>{{ stateLabel }}</span>
-        <span>消息 {{ messageCount }}</span>
-        <span>模型 {{ modelLabel }}</span>
-        <span>思考 {{ effortLabel }}</span>
-        <span>代理 {{ agentLabel }}</span>
-        <span v-if="canAbort && !aborting">Esc 中断</span>
+      <div class="header-top">
+        <h1>{{ session?.title || '新对话' }}</h1>
+        <span class="state-badge" :class="stateBadgeClass">{{ stateLabel }}</span>
       </div>
+      <p class="session-dir">{{ session?.directory || '未绑定目录' }}</p>
     </div>
   </header>
 </template>
@@ -34,62 +26,72 @@ const props = defineProps<{
   agentLabel: string
 }>()
 
-const canAbort = computed(() => props.sending || props.streamState === 'connected')
-
 const stateLabel = computed(() => {
   if (props.aborting) return '中断中'
-  if (props.sending || props.streamState === 'connected') return '流式响应中'
-  if (props.streamState === 'idle') return '会话空闲'
+  if (props.sending || props.streamState === 'connected') return '响应中'
+  if (props.streamState === 'idle') return '空闲'
   if (props.streamState === 'connecting') return '连接中'
-  return '已就绪'
+  return '就绪'
 })
 
+const stateBadgeClass = computed(() => {
+  if (props.aborting) return 'state-badge--warn'
+  if (props.sending || props.streamState === 'connected') return 'state-badge--active'
+  return 'state-badge--idle'
+})
 </script>
 
 <style scoped>
 .session-header {
-  padding: 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
 }
 
-.session-meta h1 {
-  margin: 4px 0 6px;
-  font-size: 20px;
-  line-height: 1.1;
-  color: #111827;
-}
-
-.session-meta p,
-.eyebrow,
-.status-line {
-  color: #6b7280;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.status-line {
+.header-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+}
+
+.session-meta h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.session-dir {
+  margin: 2px 0 0;
   font-size: 12px;
-  line-height: 1.6;
-  margin-top: 8px;
+  color: #9ca3af;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.status-line span::after {
-  content: '·';
-  margin-left: 10px;
-  color: #cbd5e1;
+.state-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 8px;
 }
 
-.status-line span:last-child::after {
-  display: none;
+.state-badge--active {
+  color: #d97706;
+  background: #fffbeb;
+}
+
+.state-badge--warn {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.state-badge--idle {
+  color: #6b7280;
+  background: #f3f4f6;
 }
 </style>

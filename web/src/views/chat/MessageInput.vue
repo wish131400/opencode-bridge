@@ -1,74 +1,66 @@
 <template>
   <div class="message-input">
     <div class="toolbar">
-      <div class="selector-column">
-        <div class="selector-field">
-          <label>模型</label>
-          <span class="field-tip">未选时走系统默认模型。</span>
-          <el-select
-            :model-value="selectedModelKey"
-            placeholder="选择模型"
-            clearable
-            filterable
-            @update:model-value="handleModelChange"
+      <div class="selector-row">
+        <el-select
+          :model-value="selectedModelKey"
+          placeholder="模型"
+          clearable
+          filterable
+          size="small"
+          class="selector-compact"
+          @update:model-value="handleModelChange"
+        >
+          <el-option label="默认模型" value="" />
+          <el-option-group
+            v-for="group in modelOptionGroups"
+            :key="group.providerId"
+            :label="group.providerName"
           >
-            <el-option label="系统默认模型" value="" />
-            <el-option-group
-              v-for="group in modelOptionGroups"
-              :key="group.providerId"
-              :label="group.providerName"
-            >
-              <el-option
-                v-for="option in group.options"
-                :key="option.key"
-                :label="option.label"
-                :value="option.key"
-              />
-            </el-option-group>
-          </el-select>
-        </div>
-
-        <div class="selector-field">
-          <label>思考强度</label>
-          <span class="field-tip">仅保存在当前页面内存，重启或刷新后失效。</span>
-          <el-select
-            :model-value="variant || ''"
-            placeholder="默认强度"
-            clearable
-            @update:model-value="handleVariantChange"
-          >
-            <el-option label="默认强度" value="" />
             <el-option
-              v-for="item in normalizedVariants"
-              :key="item"
-              :label="formatEffortLabel(item)"
-              :value="item"
+              v-for="option in group.options"
+              :key="option.key"
+              :label="option.label"
+              :value="option.key"
             />
-          </el-select>
-        </div>
+          </el-option-group>
+        </el-select>
 
-        <div class="selector-field">
-          <label>代理人</label>
-          <span class="field-tip">这里只选主角色，不选子角色。</span>
-          <el-select
-            :model-value="agentName || ''"
-            placeholder="默认代理人"
-            clearable
-            filterable
-            @update:model-value="handleAgentChange"
-          >
-            <el-option label="默认代理人" value="" />
-            <el-option
-              v-for="agent in normalizedAgents"
-              :key="agent.name"
-              :label="buildAgentLabel(agent)"
-              :value="agent.name"
-            />
-          </el-select>
-        </div>
+        <el-select
+          :model-value="variant || ''"
+          placeholder="思考强度"
+          clearable
+          size="small"
+          class="selector-compact"
+          @update:model-value="handleVariantChange"
+        >
+          <el-option label="默认强度" value="" />
+          <el-option
+            v-for="item in normalizedVariants"
+            :key="item"
+            :label="formatEffortLabel(item)"
+            :value="item"
+          />
+        </el-select>
+
+        <el-select
+          :model-value="agentName || ''"
+          placeholder="代理人"
+          clearable
+          filterable
+          size="small"
+          class="selector-compact"
+          @update:model-value="handleAgentChange"
+        >
+          <el-option label="默认代理人" value="" />
+          <el-option
+            v-for="agent in normalizedAgents"
+            :key="agent.name"
+            :label="buildAgentLabel(agent)"
+            :value="agent.name"
+          />
+        </el-select>
       </div>
-
-      <div class="hint">输入 `/` 打开命令面板，`Enter` 发送，`Ctrl + Enter` 或 `Shift + Enter` 换行</div>
     </div>
 
     <div class="composer">
@@ -384,34 +376,25 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .toolbar {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.selector-column {
-  display: grid;
-  gap: 10px;
+.selector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.selector-field {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
+.selector-compact {
+  width: 150px;
+  flex-shrink: 0;
 }
 
-.selector-field label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.field-tip,
-.hint,
 .char-count {
   font-size: 11px;
-  color: #6b7280;
+  color: #9ca3af;
 }
 
 .composer {

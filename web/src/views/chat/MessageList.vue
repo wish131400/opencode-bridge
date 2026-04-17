@@ -67,7 +67,7 @@ defineEmits<{
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #fafbfc;
 }
 
 .message-stack {
@@ -80,32 +80,33 @@ defineEmits<{
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 6px 14px;
   border-bottom: 1px solid #eceff3;
-  background: #f9fafb;
+  background: #f3f4f6;
   font-size: 12px;
-  color: #6b7280;
+  color: #9ca3af;
 }
 
 .state-card {
-  margin: 12px;
-  padding: 20px;
+  margin: 24px;
+  padding: 32px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
+  border-radius: 6px;
 }
 
 .empty-card {
-  min-height: 220px;
+  min-height: 180px;
   display: grid;
   place-content: center;
   text-align: center;
-  gap: 10px;
-  color: #6b7280;
+  gap: 8px;
+  color: #9ca3af;
 }
 
 .empty-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
 }
 </style>
