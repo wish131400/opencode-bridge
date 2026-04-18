@@ -151,6 +151,8 @@ function toSessionItem(s: Session): {
 }
 
 function findUndoTargetMessageId(messages: Array<{ info?: { id?: string; role?: string } }>): string | undefined {
+  // 从后往前找最后一条 user 消息作为回退目标
+  // 不再 fallback 到任意消息，避免误回退 assistant 消息
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     const messageId = typeof message?.info?.id === 'string' ? message.info.id.trim() : '';
@@ -159,14 +161,6 @@ function findUndoTargetMessageId(messages: Array<{ info?: { id?: string; role?: 
     }
 
     if (message.info?.role === 'user') {
-      return messageId;
-    }
-  }
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    const messageId = typeof message?.info?.id === 'string' ? message.info.id.trim() : '';
-    if (messageId) {
       return messageId;
     }
   }

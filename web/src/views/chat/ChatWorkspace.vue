@@ -947,17 +947,49 @@ async function handleUndoCommand(): Promise<void> {
     return
   }
 
-  composerDraft.value = target.draftText
-  discardFromMessage(target.trimMessageId)
-
+  // 如果是乐观消息（optimistic-/error-），没有后端真实ID
+  // 需要先从后端重新加载获取真实 ID，再尝试回退
   if (!target.revertMessageId) {
-    ElMessage.success('已回退上一轮')
+    // 先尝试重新加载消息，看后端是否已经有了真实 ID
+    try {
+      await reloadMessages()
+    } catch {
+      // reload 失败也继续，用本地状态兜底
+    }
+
+    // 重新查找回退目标（reload 后可能拿到了真实 ID）
+    const refreshedLatest = findLatestRevertableMessage()
+    const refreshedTarget = refreshedLatest ? buildRevertTarget(refreshedLatest) : null
+
+    if (refreshedTarget?.revertMessageId) {
+      // 拿到真实 ID 了，走正常后端回退流程
+      const draftText = refreshedTarget.draftText
+      discardFromMessage(refreshedTarget.trimMessageId)
+      try {
+        await chatApi.revertSession(activeSessionId.value, refreshedTarget.revertMessageId)
+        await reloadMessages()
+        composerDraft.value = draftText
+        ElMessage.success('已回退上一轮')
+      } catch (error) {
+        await reloadMessages()
+        ElMessage.error(error instanceof Error ? error.message : '回退失败')
+      }
+    } else {
+      // 后端也没有这条消息，仅做本地清理
+      discardFromMessage(target.trimMessageId)
+      composerDraft.value = target.draftText
+      ElMessage.success('已回退上一轮')
+    }
     return
   }
 
+  // 有后端真实 ID，使用 revertSession 精确指定要回退的消息
+  // （而非 undoSession 让后端自行查找，避免前后端目标不一致）
+  discardFromMessage(target.trimMessageId)
   try {
-    await chatApi.undoSession(activeSessionId.value)
+    await chatApi.revertSession(activeSessionId.value, target.revertMessageId)
     await reloadMessages()
+    composerDraft.value = target.draftText
     ElMessage.success('已回退上一轮')
   } catch (error) {
     await reloadMessages()
@@ -1012,18 +1044,43 @@ async function handleRevert(message: ChatMessageVm): Promise<void> {
     return
   }
 
-  composerDraft.value = target.draftText
-
+  // 如果是乐观消息，先 reload 尝试获取真实 ID
   if (!target.revertMessageId) {
-    discardFromMessage(target.trimMessageId)
-    ElMessage.success('已回退到所选消息')
+    try {
+      await reloadMessages()
+    } catch {
+      // reload 失败也继续
+    }
+
+    // 重新在刷新后的消息列表中查找对应目标
+    const refreshedTarget = buildRevertTarget(message)
+    if (refreshedTarget?.revertMessageId) {
+      // 拿到真实 ID 了，走后端回退
+      discardFromMessage(refreshedTarget.trimMessageId)
+      try {
+        await chatApi.revertSession(activeSessionId.value, refreshedTarget.revertMessageId)
+        await reloadMessages()
+        composerDraft.value = refreshedTarget.draftText
+        ElMessage.success('已回退到所选消息')
+      } catch (error) {
+        await reloadMessages()
+        ElMessage.error(error instanceof Error ? error.message : '回退失败')
+      }
+    } else {
+      // 后端也没有，仅做本地清理
+      discardFromMessage(target.trimMessageId)
+      composerDraft.value = target.draftText
+      ElMessage.success('已回退到所选消息')
+    }
     return
   }
 
+  // 有后端真实 ID，执行正常回退流程
+  discardFromMessage(target.trimMessageId)
   try {
-    discardFromMessage(target.trimMessageId)
     await chatApi.revertSession(activeSessionId.value, target.revertMessageId)
     await reloadMessages()
+    composerDraft.value = target.draftText
     ElMessage.success('已回退到所选消息')
   } catch (error) {
     await reloadMessages()

@@ -582,22 +582,27 @@ async function refreshStatus(announce = false): Promise<void> {
     if (announce) {
       ElMessage.success('Git 状态已刷新')
     }
-  } catch (err) {
+  } catch (err: unknown) {
     if (currentVersion !== statusVersion) {
       return
     }
 
     let errorMessage = '读取 Git 状态失败'
 
-    if (err instanceof Error) {
-      const rawMessage = err.message.toLowerCase()
-      if (rawMessage.includes('403') || rawMessage.includes('forbidden')) {
-        errorMessage = '当前没有建立git仓库'
-      } else if (rawMessage.includes('当前目录不是 git 仓库') || rawMessage.includes('not a git repository')) {
-        errorMessage = '当前目录不是 Git 仓库'
-      } else {
-        errorMessage = err.message
-      }
+    // 从 axios 响应中提取后端返回的错误信息和状态码
+    const axiosError = err as { response?: { status?: number; data?: { error?: string } }; message?: string }
+    const httpStatus = axiosError.response?.status
+    const backendMessage = axiosError.response?.data?.error ?? ''
+
+    if (httpStatus === 409 || backendMessage.includes('不是 Git 仓库') || backendMessage.includes('not a git repository')) {
+      // 409 = ensureGitRepo 检测到当前目录不是 git 仓库
+      errorMessage = '当前目录不是 Git 仓库'
+    } else if (httpStatus === 403 || backendMessage.includes('forbidden')) {
+      errorMessage = '当前没有建立git仓库'
+    } else if (backendMessage) {
+      errorMessage = backendMessage
+    } else if (err instanceof Error) {
+      errorMessage = err.message
     }
 
     error.value = errorMessage
@@ -887,18 +892,22 @@ async function handleInitRepo(): Promise<void> {
   await runAction('init', 'Git 仓库初始化完成', async () => {
     try {
       await workspaceApi.initRepo(props.directory!)
-    } catch (err) {
+    } catch (err: unknown) {
       let errorMessage = '初始化Git仓库失败'
 
-      if (err instanceof Error) {
-        const rawMessage = err.message.toLowerCase()
-        if (rawMessage.includes('403') || rawMessage.includes('forbidden')) {
-          errorMessage = '权限不足：无法在当前目录创建Git仓库，请检查目录权限'
-        } else if (rawMessage.includes('no such file') || rawMessage.includes('directory')) {
-          errorMessage = '目录不存在：请先创建目标目录'
-        } else {
-          errorMessage = err.message
-        }
+      // 从 axios 响应中提取后端返回的错误信息和状态码
+      const axiosError = err as { response?: { status?: number; data?: { error?: string } }; message?: string }
+      const httpStatus = axiosError.response?.status
+      const backendMessage = axiosError.response?.data?.error ?? ''
+
+      if (httpStatus === 403 || backendMessage.toLowerCase().includes('forbidden')) {
+        errorMessage = '权限不足：无法在当前目录创建Git仓库，请检查目录权限'
+      } else if (backendMessage.toLowerCase().includes('no such file') || backendMessage.toLowerCase().includes('directory')) {
+        errorMessage = '目录不存在：请先创建目标目录'
+      } else if (backendMessage) {
+        errorMessage = backendMessage
+      } else if (err instanceof Error) {
+        errorMessage = err.message
       }
 
       throw new Error(errorMessage)
