@@ -1,6 +1,6 @@
 # OpenCode Bridge
 
-[![v2.9.59](https://img.shields.io/badge/v2.9.59-3178C6)]()
+[![v3.0.0](https://img.shields.io/badge/v3.0.0-3178C6)]()
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -9,7 +9,20 @@
 
 ---
 
-> **OpenCode Bridge** is an enterprise-grade AI programming collaboration bridge service that seamlessly integrates OpenCode (AI coding assistant) with mainstream instant messaging platforms, enabling cross-platform, cross-device intelligent programming collaboration.
+> **OpenCode Bridge** is an enterprise-grade full-featured OpenCode wrapper application that seamlessly integrates OpenCode's AI programming capabilities and intelligent conversation capabilities into mainstream instant messaging platforms, enabling a unified cross-platform, cross-device intelligent collaboration experience.
+
+---
+
+## 🎯 Project Positioning
+
+**OpenCode Bridge** is not just a simple message bridge, but a complete OpenCode wrapper application:
+
+- **🤖 AI Programming Assistant**: Full access to OpenCode's intelligent programming capabilities, supporting code generation, debugging, refactoring, and more
+- **💬 Intelligent Conversation System**: Integrated Chat capabilities, providing natural language interaction, knowledge Q&A, task assistance, and other conversational services
+- **🔌 Full Platform Adaptation**: One codebase supports 8 major mainstream communication platforms with unified interaction management
+- **⚙️ Programmatic Bridge**: Deeply integrated with OpenCode SDK, implementing complete functionality including session management, permission control, and file transfer
+
+Unlike simple message forwarding, OpenCode Bridge provides a complete OpenCode experience wrapper, allowing users to get native OpenCode functionality on any platform.
 
 ---
 
@@ -48,25 +61,44 @@
 ## ✨ Key Features
 
 ### 🔄 Smart Session Management
+
 - **Independent Session Binding**: Each group/private chat binds to an independent OpenCode session with isolated context
 - **Session Migration**: Support session binding, migration, and renaming with context preserved across devices
 - **Multi-Project Support**: Multiple project directory switching with alias configuration
 - **Auto Cleanup**: Automatic cleanup of invalid sessions to prevent resource leaks
 
-### 🤖 AI Interaction Capabilities
+### 🤖 AI Programming Capabilities
+
+- **Intelligent Code Generation**: Support multi-language code generation with real-time syntax highlighting
+- **Code Debugging & Analysis**: Automatic error location with fix suggestions
+- **Project Context Understanding**: Intelligent analysis based on complete project codebase
+- **Shell Command Execution**: Whitelisted commands can be executed directly in chat
+- **File Operations**: AI can read/write project files, supporting code refactoring
+
+### 💬 Intelligent Conversation System
+
+- **Natural Language Interaction**: Support multi-turn conversations with complex semantic understanding
+- **Knowledge Q&A**: Intelligent Q&A based on OpenCode knowledge base
+- **Task Assistance**: Provide task decomposition, step guidance, and other auxiliary functions
+- **Context Memory**: Cross-session context preservation and memory management
+
+### 🔌 Deep Integration Capabilities
+
 - **Streaming Output**: Real-time AI response display with thinking chain support
 - **Permission Interaction**: AI permission requests confirmed within the chat platform
 - **Question Answering**: AI questions answered within the chat platform
 - **File Transfer**: AI can send files/screenshots to the chat platform
-- **Shell Passthrough**: Whitelisted commands can be executed directly in chat
+- **Multimodal Support**: Support images, documents, and other formats
 
 ### 🛡️ Reliability Assurance
+
 - **Heartbeat Monitoring**: Periodic OpenCode health probing
 - **Auto Rescue**: Automatic restart and recovery when OpenCode crashes
 - **Cron Tasks**: Runtime dynamic management of scheduled tasks
 - **Log Auditing**: Complete operation logs and error tracking
 
 ### 🎛️ Web Management Panel
+
 - **Visual Configuration**: Real-time modification of all configuration parameters in browser
 - **Platform Management**: View connection status of each platform
 - **Cron Management**: Create, enable/disable, delete scheduled tasks
@@ -74,16 +106,67 @@
 
 ---
 
+## 🏗️ Architecture Overview
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   📱 Platform Adapter Layer          │
+│  Feishu | Discord | WeCom | Telegram | QQ |         │
+│        WhatsApp | WeChat | DingTalk                  │
+└──────────────────────┬──────────────────────────────┘
+                       │ Unified Message Format
+┌──────────────────────▼──────────────────────────────┐
+│                   ⚙️ Core Processing Layer           │
+│  RootRouter → Session Mgmt / Permission / Q&A        │
+│              Programming / Chat / Output Buffer      │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│                   🔗 Integration Layer                │
+│              OpenCode Client SDK                     │
+│    (Programming API + Chat API + Session Mgmt)       │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│                   🌐 OpenCode Core                    │
+│   AI Programming Service | Chat Service | CLI Tools  │
+└─────────────────────────────────────────────────────┘
+```
+
+### Architecture Description
+
+| Layer | Responsibility | Key Components |
+|-------|----------------|----------------|
+| 📱 Platform Adapter Layer | Receive messages from each platform, unified format conversion | 8 Platform Adapters |
+| ⚙️ Core Processing Layer | Message routing, session management, business processing | RootRouter, SessionManager, Permission, Question |
+| 🔗 Integration Layer | Deep integration with OpenCode, complete functionality calls | OpencodeClient SDK (Programming + Chat) |
+| 🌐 OpenCode Core | AI services, conversation services, toolchain | OpenCode Full-Featured Service |
+
+### Comparison with Traditional Bridge
+
+| Feature | Traditional Message Bridge | OpenCode Bridge |
+|---------|---------------------------|-----------------|
+| Function Scope | Message Forwarding | Complete Feature Wrapper |
+| Session Management | Simple Mapping | Deep Integration |
+| Capability Support | Single AI | Programming + Chat Dual Capabilities |
+| Permission Control | None | Complete Permission Interaction System |
+| File Operations | None | Support File Read/Write/Transfer |
+| Extensibility | Limited | Support Plugin-based Extensions |
+
+---
+
 ## 🚀 Quick Start
 
 ### Desktop App (Recommended)
 
-Windows and macOS users can download installers directly:
+Windows and macOS users can download installers directly from [GitHub Releases](https://github.com/HNGM-HP/opencode-bridge/releases):
 
 | Platform | Download |
 |----------|----------|
-| Windows | Download `.exe` installer from [GitHub Releases](https://github.com/HNGM-HP/opencode-bridge/releases) |
-| macOS | Download `.dmg` installer from [GitHub Releases](https://github.com/HNGM-HP/opencode-bridge/releases) |
+| Windows | Download `.exe` installer |
+| macOS | Download `.dmg` installer |
 
 **Installation Notes:**
 - **Windows**: Double-click `.exe` installer and follow the wizard. If you see "unrecognized app" warning, select "Run anyway"
@@ -198,71 +281,6 @@ The following commands are available on all platforms:
 | `///compact` | Compress context |
 | `///workdir` | Set working directory |
 | `///cron ...` | Manage Cron tasks |
-
----
-
-## 🏗️ Architecture Overview
-
-### System Architecture Diagram
-
-```mermaid
-flowchart LR
-    %% Style definitions
-    classDef platform fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,rx:8px
-    classDef core fill:#fff3e0,stroke:#f57c00,stroke-width:2px,rx:8px
-    classDef handler fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,rx:8px
-    classDef opencode fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,rx:8px
-    classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:2px,rx:8px,stroke-dasharray:5 5
-
-    subgraph PlatformLayer["📱 Platform Adapter Layer"]
-        direction TB
-        feishu["✈️ Feishu"]:::platform
-        discord["🎮 Discord"]:::platform
-        wecom["💼 WeCom"]:::platform
-        telegram["📤 Telegram"]:::platform
-        qq["🐧 QQ"]:::platform
-        whatsapp["📞 WhatsApp"]:::platform
-        weixin["💬 WeChat"]:::platform
-        dingtalk["📌 DingTalk"]:::platform
-    end
-
-    subgraph CoreLayer["⚙️ Core Processing Layer"]
-        direction TB
-        router["🔀 Router Center<br/><b>RootRouter</b>"]:::core
-
-        subgraph Handlers["Handler Modules"]
-            direction LR
-            permission["🔐 Permission Handler"]:::handler
-            question["❓ Q&A Handler"]:::handler
-            output["📤 Output Buffer"]:::handler
-        end
-    end
-
-    subgraph IntegrationLayer["🔗 Integration Layer"]
-        sdk["🔌 OpenCode SDK<br/><b>OpencodeClient</b>"]:::opencode
-    end
-
-    subgraph External["🌐 External Services"]
-        opencode["🤖 OpenCode Service"]:::external
-        cli["💻 OpenCode CLI"]:::external
-    end
-
-    %% Connections
-    PlatformLayer --> router
-    router --> Handlers
-    Handlers --> sdk
-    sdk --> opencode
-    opencode -.-> cli
-```
-
-**Architecture Description:**
-
-| Layer | Responsibility | Key Components |
-|-------|----------------|----------------|
-| 📱 Platform Adapter Layer | Receive messages from each platform, unified format conversion | 8 Platform Adapters |
-| ⚙️ Core Processing Layer | Message routing, permission validation, business processing | RootRouter, Permission, Question, Output |
-| 🔗 Integration Layer | Communicate with OpenCode, send/receive requests | OpencodeClient SDK |
-| 🌐 External Services | Actual AI service and CLI tools | OpenCode Service, CLI |
 
 ---
 
