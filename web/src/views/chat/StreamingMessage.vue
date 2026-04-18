@@ -6,23 +6,20 @@
         <CodeBlock v-else :code="segment.code" :language="segment.language" />
       </template>
     </template>
-    <span v-else-if="placeholder" class="placeholder">{{ placeholder }}</span>
-    <span class="caret" />
+    <span v-if="text" class="caret" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import Markdown from '../../components/ai-elements/Markdown.vue'
-import CodeBlock from '../../components/ai-elements/CodeBlock.vue'
+import { defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { splitMarkdownSegments, type MarkdownSegment } from '../../components/ai-elements/markdown-utils'
 
-const props = withDefaults(defineProps<{
+const Markdown = defineAsyncComponent(() => import('../../components/ai-elements/Markdown.vue'))
+const CodeBlock = defineAsyncComponent(() => import('../../components/ai-elements/CodeBlock.vue'))
+
+const props = defineProps<{
   text: string
-  placeholder?: string
-}>(), {
-  placeholder: '',
-})
+}>()
 
 /**
  * Debounced segments: during rapid streaming deltas we skip expensive
@@ -68,10 +65,6 @@ onBeforeUnmount(() => {
 <style scoped>
 .streaming-message {
   word-break: break-word;
-}
-
-.placeholder {
-  color: #6f7f98;
 }
 
 .caret {

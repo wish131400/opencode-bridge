@@ -5,7 +5,7 @@ import { outputBuffer } from '../opencode/output-buffer.js';
 import { questionHandler, type PendingQuestion } from '../opencode/question-handler.js';
 import { parseQuestionAnswerText } from '../opencode/question-parser.js';
 import { parseCommand } from '../commands/parser.js';
-import type { EffortLevel } from '../commands/effort.js';
+import { normalizeEffortLevel, KNOWN_EFFORT_LEVELS, type EffortLevel } from '../commands/effort.js';
 import { commandHandler } from './command.js';
 import { modelConfig, attachmentConfig } from '../config.js';
 import { DirectoryPolicy } from '../utils/directory-policy.js';
@@ -437,7 +437,59 @@ export class GroupHandler {
       }
 
       // 异步触发 OpenCode 请求，后续输出通过事件流持续推送
-      const variant = promptEffort || config?.preferredEffort;
+      let variant = promptEffort || config?.preferredEffort;
+
+      // 验证 variant 是否与当前模型兼容
+      if (variant && providerId && modelId) {
+        try {
+          const providersPayload = await opencodeClient.getProviders();
+          const providers = Array.isArray(providersPayload.providers) ? providersPayload.providers : [];
+          const providerLower = providerId.toLowerCase();
+          const modelLower = modelId.toLowerCase();
+
+          for (const provider of providers) {
+            if (!provider || typeof provider !== 'object') continue;
+            const providerRecord = provider as Record<string, unknown>;
+            const providerIdRaw = typeof providerRecord.id === 'string' ? providerRecord.id.trim() : '';
+            if (!providerIdRaw || providerIdRaw.toLowerCase() !== providerLower) continue;
+
+            const modelsRaw = providerRecord.models;
+            const modelList = Array.isArray(modelsRaw)
+              ? modelsRaw
+              : (modelsRaw && typeof modelsRaw === 'object' ? Object.values(modelsRaw) : []);
+
+            for (const modelItem of modelList) {
+              if (!modelItem || typeof modelItem !== 'object') continue;
+              const modelRecord = modelItem as Record<string, unknown>;
+              const modelIdRaw = typeof modelRecord.id === 'string'
+                ? modelRecord.id.trim()
+                : (typeof modelRecord.modelID === 'string' ? modelRecord.modelID.trim() : '');
+              if (!modelIdRaw || modelIdRaw.toLowerCase() !== modelLower) continue;
+
+              // 解析模型支持的 variants
+              const variants = modelRecord.variants;
+              if (variants && typeof variants === 'object' && !Array.isArray(variants)) {
+                const supportedVariants: EffortLevel[] = [];
+                for (const key of Object.keys(variants as Record<string, unknown>)) {
+                  const normalized = normalizeEffortLevel(key);
+                  if (normalized && normalized !== 'none' && !supportedVariants.includes(normalized)) {
+                    supportedVariants.push(normalized);
+                  }
+                }
+                // 如果当前 variant 不在支持列表中，清除它
+                if (supportedVariants.length > 0 && !supportedVariants.includes(variant)) {
+                  variant = undefined;
+                }
+              }
+              break;
+            }
+            break;
+          }
+        } catch (error) {
+          console.debug('[Group] 获取模型支持的 variants 失败，跳过验证:', error instanceof Error ? error.message : String(error));
+        }
+      }
+
       // 从 store 获取会话的工作目录，传递给 OpenCode 以切换 Instance 上下文
       const sessionData = chatSessionStore.getSession(chatId);
       let directory = sessionData?.resolvedDirectory;

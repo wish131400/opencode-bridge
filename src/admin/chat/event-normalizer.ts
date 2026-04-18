@@ -100,11 +100,13 @@ function diffText(prev: string, next: string): string {
 
 interface MessageState {
   msgId: string;
+  role?: 'user' | 'assistant';
   started: boolean;
   finishedEmitted: boolean;
   textByPartId: Map<string, string>;
   reasoningByPartId: Map<string, string>;
   toolStarted: Set<string>; // callID 集合
+  pendingParts: Map<string, MessagePartUpdatedPayload>;
 }
 
 interface SessionState {
@@ -191,11 +193,13 @@ export class ChatEventNormalizer {
     if (!m) {
       m = {
         msgId,
+        role: undefined,
         started: false,
         finishedEmitted: false,
         textByPartId: new Map(),
         reasoningByPartId: new Map(),
         toolStarted: new Set(),
+        pendingParts: new Map(),
       };
       s.messages.set(msgId, m);
     }
@@ -215,6 +219,7 @@ export class ChatEventNormalizer {
     if (!sessionId || !msgId) return;
 
     const state = this.getMessageState(sessionId, msgId);
+    state.role = info.role;
 
     // 首次见到这条 assistant 消息 → message_start
     if (info.role === 'assistant' && !state.started) {
@@ -231,6 +236,16 @@ export class ChatEventNormalizer {
           agent: info.mode,
         },
       });
+    }
+
+    if (info.role === 'assistant' && state.pendingParts.size > 0) {
+      const pendingParts = Array.from(state.pendingParts.values());
+      state.pendingParts.clear();
+      for (const pending of pendingParts) {
+        this.processAssistantPartUpdate(sessionId, state, pending);
+      }
+    } else if (info.role === 'user' && state.pendingParts.size > 0) {
+      state.pendingParts.clear();
     }
 
     // 完成 → message_end
@@ -257,7 +272,26 @@ export class ChatEventNormalizer {
     if (!sessionId || !msgId) return;
 
     const state = this.getMessageState(sessionId, msgId);
+    if (state.role === 'user') {
+      return;
+    }
 
+    if (state.role !== 'assistant') {
+      state.pendingParts.set(part.id, payload);
+      return;
+    }
+
+    this.processAssistantPartUpdate(sessionId, state, payload);
+  }
+
+  private processAssistantPartUpdate(
+    sessionId: string,
+    state: MessageState,
+    payload: MessagePartUpdatedPayload
+  ): void {
+    const part = payload.part;
+    const msgId = part.messageID;
+    if (!msgId) return;
     switch (part.type) {
       case 'text': {
         // 优先用 OpenCode 提供的 delta；缺失时自行 diff

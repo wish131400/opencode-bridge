@@ -31,6 +31,7 @@ import type { BridgeManager } from './bridge-manager.js';
 import { createSessionRoutes } from './routes/session.js';
 import { registerWorkspaceGitRoutes } from './routes/workspace-git.js';
 import { registerWorkspaceFilesRoutes } from './routes/workspace-files.js';
+import { registerWorkspaceTerminalRoutes } from './routes/workspace-terminal.js';
 import { registerChatRoutes } from './routes/chat.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1022,6 +1023,7 @@ objShell.Run "cmd /c opencode serve", 0, False
   api.use('/sessions', createSessionRoutes());
   registerWorkspaceGitRoutes(api);
   registerWorkspaceFilesRoutes(api);
+  registerWorkspaceTerminalRoutes(api);
 
   // ── POST /api/admin/shutdown（终止服务）
   api.post('/admin/shutdown', async (_req, res) => {

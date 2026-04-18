@@ -130,7 +130,7 @@ import ConfigActionBar from '../components/ConfigActionBar.vue'
 
 const store = useConfigStore()
 const saving = ref(false)
-const autoStart = ref(false)
+const autoStart = ref(true)
 const portNum = ref(4096)
 const selectedProvider = ref('')
 const currentModels = ref<string[]>([])
@@ -141,7 +141,7 @@ const providers = computed(() => store.modelProviders)
 const form = reactive({
   OPENCODE_HOST: 'localhost',
   OPENCODE_PORT: '4096',
-  OPENCODE_AUTO_START: 'false',
+  OPENCODE_AUTO_START: 'true',
   OPENCODE_AUTO_START_CMD: 'opencode serve',
   OPENCODE_SERVER_USERNAME: 'opencode',
   OPENCODE_SERVER_PASSWORD: '',
@@ -179,7 +179,7 @@ function syncFromStore() {
   Object.assign(form, {
     OPENCODE_HOST: s.OPENCODE_HOST || 'localhost',
     OPENCODE_PORT: s.OPENCODE_PORT || '4096',
-    OPENCODE_AUTO_START: s.OPENCODE_AUTO_START || 'false',
+    OPENCODE_AUTO_START: s.OPENCODE_AUTO_START || 'true',
     OPENCODE_AUTO_START_CMD: s.OPENCODE_AUTO_START_CMD || 'opencode serve',
     OPENCODE_SERVER_USERNAME: s.OPENCODE_SERVER_USERNAME || 'opencode',
     OPENCODE_SERVER_PASSWORD: s.OPENCODE_SERVER_PASSWORD || '',

@@ -28,17 +28,18 @@
 
         <el-select
           :model-value="variant || ''"
-          placeholder="思考强度"
+          :placeholder="variantSelectorDisabled ? '当前模型不支持思考强度' : '思考强度'"
           clearable
           size="small"
           class="selector-compact"
+          :disabled="variantSelectorDisabled"
           @update:model-value="handleVariantChange"
         >
           <el-option label="默认强度" value="" />
           <el-option
             v-for="item in normalizedVariants"
             :key="item"
-            :label="formatEffortLabel(item)"
+            :label="formatVariantLabel(item)"
             :value="item"
           />
         </el-select>
@@ -131,21 +132,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { ChatAgentInfo, ChatCommandInfo, ChatModelProviderInfo } from '../../api'
+import { formatVariantLabel } from '../../composables/chat-model'
 import { getSlashCommands } from './slash-command-cache'
 
 interface ModelOption {
   key: string
   label: string
-}
-
-const EFFORT_LABELS: Record<string, string> = {
-  none: 'none',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  max: 'max',
-  xhigh: 'xhigh',
 }
 
 const props = defineProps<{
@@ -182,6 +174,7 @@ const highlightedCommandIndex = ref(0)
 const normalizedProviders = computed(() => Array.isArray(props.providers) ? props.providers : [])
 const normalizedAgents = computed(() => Array.isArray(props.agents) ? props.agents : [])
 const normalizedVariants = computed(() => Array.isArray(props.variants) ? props.variants : [])
+const variantSelectorDisabled = computed(() => normalizedVariants.value.length === 0)
 const draftModel = computed({
   get: () => props.draft,
   set: value => emit('update:draft', value),
@@ -205,7 +198,34 @@ const selectedModelKey = computed(() => {
   return `${props.providerId}::${props.modelId}`
 })
 
-const submitDisabled = computed(() => props.disabled || props.sending || !draftModel.value.trim())
+const immediateCommand = computed<'undo' | 'abort' | null>(() => {
+  const normalized = draftModel.value.trim().toLowerCase()
+  if (normalized === '/undo' || normalized === '/revert') {
+    return 'undo'
+  }
+
+  if (normalized === '/stop' || normalized === '/abort' || normalized === '/cancel') {
+    return 'abort'
+  }
+
+  return null
+})
+
+const submitDisabled = computed(() => {
+  if (props.disabled || !draftModel.value.trim()) {
+    return true
+  }
+
+  if (immediateCommand.value === 'abort') {
+    return props.aborting
+  }
+
+  if (immediateCommand.value === 'undo') {
+    return props.sending || props.aborting
+  }
+
+  return props.sending
+})
 
 const slashMatch = computed(() => {
   const match = draftModel.value.match(/(^|\s)(\/[^\s]*)$/)
@@ -259,10 +279,6 @@ function buildAgentLabel(agent: ChatAgentInfo): string {
   const prefix = agent.mode === 'subagent' ? '子' : '主'
   const title = agent.description?.trim() || agent.name
   return `(${prefix}) ${title}`
-}
-
-function formatEffortLabel(value: string): string {
-  return EFFORT_LABELS[value] || value
 }
 
 function handleModelChange(value?: string): void {
@@ -325,7 +341,7 @@ function applySlashCommand(command: ChatCommandInfo): void {
 
 function submit(): void {
   const text = draftModel.value.trim()
-  if (!text || props.sending) return
+  if (!text || submitDisabled.value) return
   emit('submit', {
     text,
     providerId: props.providerId,

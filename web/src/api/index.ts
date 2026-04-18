@@ -598,6 +598,38 @@ export interface WorkspaceGitStatus {
   }
 }
 
+export interface WorkspaceGitLogEntry {
+  sha: string
+  message: string
+  authorName: string
+  authorEmail: string
+  date: string
+}
+
+export interface WorkspaceGitCommitDetail {
+  sha: string
+  message: string
+  authorName: string
+  authorEmail: string
+  date: string
+  stats: string
+  diff: string
+}
+
+export interface WorkspaceTerminalSession {
+  sessionId: string
+  shell: string
+  cwd: string
+}
+
+export interface WorkspaceTerminalCommandResult {
+  ok: boolean
+  exitCode: number
+  stdout: string
+  stderr: string
+  cwd: string
+}
+
 export interface WorkspaceFileEntry {
   name: string
   path: string
@@ -1075,6 +1107,11 @@ export const chatApi = {
     await http.post(`/chat/sessions/${encodeURIComponent(sessionId)}/abort`)
   },
 
+  async undoSession(sessionId: string): Promise<{ messageId?: string }> {
+    const res = await http.post<{ ok: boolean; messageId?: string }>(`/chat/sessions/${encodeURIComponent(sessionId)}/undo`)
+    return { messageId: res.data.messageId }
+  },
+
   async revertSession(sessionId: string, messageId: string): Promise<void> {
     await http.post(`/chat/sessions/${encodeURIComponent(sessionId)}/revert`, { messageId })
   },
@@ -1117,6 +1154,70 @@ export const workspaceApi = {
 
   async checkout(directory: string, branch: string): Promise<void> {
     await http.post('/workspace/git/checkout', { directory, branch })
+  },
+
+  async checkoutCommit(directory: string, sha: string): Promise<void> {
+    await http.post('/workspace/git/checkout', { directory, ref: sha, detach: true })
+  },
+
+  async createBranch(directory: string, branch: string, switchAfterCreate = true): Promise<{ branch: string; switched: boolean }> {
+    const res = await http.post<{ ok: boolean; branch: string; switched: boolean }>('/workspace/git/branch/create', {
+      directory,
+      branch,
+      switchAfterCreate,
+    })
+    return {
+      branch: res.data.branch,
+      switched: res.data.switched,
+    }
+  },
+
+  async deleteBranch(directory: string, branch: string): Promise<void> {
+    await http.post('/workspace/git/branch/delete', { directory, branch })
+  },
+
+  async getGitHistory(directory: string, limit = 30): Promise<WorkspaceGitLogEntry[]> {
+    const res = await http.get<{ entries: WorkspaceGitLogEntry[] }>('/workspace/git/log', {
+      params: { directory, limit },
+    })
+    return res.data.entries
+  },
+
+  async getGitCommitDetail(directory: string, sha: string): Promise<WorkspaceGitCommitDetail> {
+    const res = await http.get<WorkspaceGitCommitDetail>('/workspace/git/log/detail', {
+      params: { directory, sha },
+    })
+    return res.data
+  },
+
+  async initRepo(directory: string): Promise<void> {
+    await http.post('/workspace/git/init', { directory })
+  },
+
+  async openTerminal(directory: string): Promise<WorkspaceTerminalSession> {
+    const res = await http.post<{ ok: boolean; sessionId: string; shell: string; cwd: string }>('/workspace/terminal/open', {
+      directory,
+    })
+    return {
+      sessionId: res.data.sessionId,
+      shell: res.data.shell,
+      cwd: res.data.cwd,
+    }
+  },
+
+  async executeCommand(payload: {
+    sessionId: string
+    command: string
+  }): Promise<WorkspaceTerminalCommandResult> {
+    const res = await http.post<WorkspaceTerminalCommandResult>('/workspace/terminal/execute', {
+      sessionId: payload.sessionId,
+      command: payload.command,
+    })
+    return res.data
+  },
+
+  async closeTerminal(sessionId: string): Promise<void> {
+    await http.post('/workspace/terminal/close', { sessionId })
   },
 
   async listFiles(payload: {

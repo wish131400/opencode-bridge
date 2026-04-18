@@ -9,6 +9,7 @@
  *   DELETE /sessions/:id                    删除 { directory? as query }
  *   GET    /sessions/:id/messages           历史消息（info + parts）
  *   POST   /sessions/:id/revert             回退到指定消息（删除该消息及之后消息）
+ *   POST   /sessions/:id/undo               回退上一轮对话
  *   POST   /sessions/:id/summarize          触发总结（可选）
  *
  * 所有路由只是 opencodeClient 的薄封装，不引入本地持久化。
@@ -147,6 +148,30 @@ function toSessionItem(s: Session): {
     summary: s.summary,
     share: s.share,
   };
+}
+
+function findUndoTargetMessageId(messages: Array<{ info?: { id?: string; role?: string } }>): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const messageId = typeof message?.info?.id === 'string' ? message.info.id.trim() : '';
+    if (!messageId) {
+      continue;
+    }
+
+    if (message.info?.role === 'user') {
+      return messageId;
+    }
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const messageId = typeof message?.info?.id === 'string' ? message.info.id.trim() : '';
+    if (messageId) {
+      return messageId;
+    }
+  }
+
+  return undefined;
 }
 
 export function registerChatSessionsRoutes(app: Application): void {
@@ -309,6 +334,35 @@ export function registerChatSessionsRoutes(app: Application): void {
       res.json({ ok: true });
     } catch (e) {
       console.error('[Chat API] 回退会话失败:', e);
+      res.status(502).json({ error: errorMsg(e) });
+    }
+  });
+
+  // ── POST /sessions/:id/undo — 回退上一轮对话
+  router.post('/sessions/:id/undo', async (req: Request, res: Response) => {
+    try {
+      const sessionId = paramStr(req.params.id);
+      if (!sessionId) {
+        res.status(400).json({ error: '缺少 sessionId' });
+        return;
+      }
+
+      const messages = await opencodeClient.getSessionMessages(sessionId);
+      const targetMessageId = findUndoTargetMessageId(messages);
+      if (!targetMessageId) {
+        res.status(409).json({ error: '当前没有可回退的对话' });
+        return;
+      }
+
+      const ok = await opencodeClient.revertMessage(sessionId, targetMessageId);
+      if (!ok) {
+        res.status(502).json({ error: '回退失败' });
+        return;
+      }
+
+      res.json({ ok: true, messageId: targetMessageId });
+    } catch (e) {
+      console.error('[Chat API] 回退上一轮失败:', e);
       res.status(502).json({ error: errorMsg(e) });
     }
   });

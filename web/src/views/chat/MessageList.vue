@@ -25,26 +25,48 @@
       </div>
 
       <Conversation class="message-stack">
-        <MessageItem
-          v-for="(message, index) in messages"
-          :key="message.id"
-          :message="message"
-          :undo-disabled="undoDisabled"
-          :auto-expand="index === messages.length - 1 && message.role === 'assistant' && message.status === 'streaming'"
-          @revert="$emit('revert', $event)"
-        />
+        <template v-for="turn in turns" :key="turn.id">
+          <!-- 有用户消息的轮次：用 TurnItem 合并展示 -->
+          <TurnItem
+            v-if="turn.userMessage"
+            :user-message="turn.userMessage"
+            :assistant-messages="turn.assistantMessages"
+            :undo-disabled="undoDisabled"
+            :auto-expand="turn.autoExpand"
+            @revert="$emit('revert', $event)"
+          />
+          <!-- 无配对用户消息的 assistant 消息（历史加载不完整等）：用原始 MessageItem -->
+          <MessageItem
+            v-else
+            v-for="msg in turn.assistantMessages"
+            :key="msg.id"
+            :message="msg"
+            :undo-disabled="undoDisabled"
+            :auto-expand="turn.autoExpand"
+            @revert="$emit('revert', $event)"
+          />
+        </template>
       </Conversation>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import Conversation from '../../components/ai-elements/Conversation.vue'
 import MessageItem from './MessageItem.vue'
+import TurnItem from './TurnItem.vue'
 import type { ChatSessionSummary } from '../../api'
 import type { ChatMessageVm } from '../../composables/chat-model'
 
-defineProps<{
+interface ConversationTurn {
+  id: string
+  userMessage: ChatMessageVm | null
+  assistantMessages: ChatMessageVm[]
+  autoExpand: boolean
+}
+
+const props = defineProps<{
   session: ChatSessionSummary | null
   messages: ChatMessageVm[]
   loading: boolean
@@ -58,6 +80,55 @@ defineEmits<{
   'load-more': []
   revert: [ChatMessageVm]
 }>()
+
+/**
+ * 将消息列表按"对话轮次"分组：
+ * - 每个 user 消息开启一个新轮次
+ * - 后续的所有 assistant 消息归入同一轮次
+ * - 直到遇到下一个 user 消息
+ * - 开头如果是 assistant 消息（无前置 user），单独成组
+ */
+const turns = computed<ConversationTurn[]>(() => {
+  const result: ConversationTurn[] = []
+  let currentTurn: ConversationTurn | null = null
+
+  for (const msg of props.messages) {
+    if (msg.role === 'user') {
+      // 新轮次
+      currentTurn = {
+        id: `turn-${msg.id}`,
+        userMessage: msg,
+        assistantMessages: [],
+        autoExpand: false,
+      }
+      result.push(currentTurn)
+    } else {
+      // assistant 消息
+      if (!currentTurn) {
+        // 没有前置 user 消息，单独成组
+        currentTurn = {
+          id: `turn-orphan-${msg.id}`,
+          userMessage: null,
+          assistantMessages: [msg],
+          autoExpand: false,
+        }
+        result.push(currentTurn)
+      } else {
+        currentTurn.assistantMessages.push(msg)
+      }
+    }
+  }
+
+  // 最后一个轮次如果有流式 assistant 消息，自动展开
+  if (result.length > 0) {
+    const lastTurn = result[result.length - 1]
+    if (lastTurn.assistantMessages.some(msg => msg.status === 'streaming')) {
+      lastTurn.autoExpand = true
+    }
+  }
+
+  return result
+})
 </script>
 
 <style scoped>

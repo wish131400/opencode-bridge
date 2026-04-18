@@ -80,8 +80,9 @@ defineExpose({
 .conversation {
   display: grid;
   align-content: start;
-  gap: 0;
+  gap: 14px;
   overflow-y: auto;
   scroll-behavior: smooth;
+  padding: 18px 14px 24px;
 }
 </style>

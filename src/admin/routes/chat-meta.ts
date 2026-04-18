@@ -4,7 +4,7 @@ import express, { type Application, type Request, type Response } from 'express'
 import { opencodeClient } from '../../opencode/client.js';
 import { configStore } from '../../store/config-store.js';
 import { chatAuthMiddleware } from './chat-auth.js';
-import { KNOWN_EFFORT_LEVELS, normalizeEffortLevel, type EffortLevel } from '../../commands/effort.js';
+import { KNOWN_EFFORT_LEVELS, normalizeEffortLevel } from '../../commands/effort.js';
 
 function errorMsg(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -41,19 +41,35 @@ function extractProviderId(provider: unknown): string | undefined {
   return rawId || undefined;
 }
 
-function extractEffortVariants(modelRecord: Record<string, unknown>): EffortLevel[] {
+function extractEffortVariants(modelRecord: Record<string, unknown>): string[] {
   const rawVariants = modelRecord.variants;
-  if (!rawVariants || typeof rawVariants !== 'object' || Array.isArray(rawVariants)) {
+  if (!rawVariants) {
     return [];
   }
 
-  const efforts: EffortLevel[] = [];
-  for (const key of Object.keys(rawVariants as Record<string, unknown>)) {
-    const normalized = normalizeEffortLevel(key);
-    if (!normalized || efforts.includes(normalized)) {
+  const values = Array.isArray(rawVariants)
+    ? rawVariants
+    : Object.keys(rawVariants as Record<string, unknown>);
+
+  const variants: string[] = [];
+  const dedupe = new Set<string>();
+  for (const rawValue of values) {
+    if (typeof rawValue !== 'string') {
       continue;
     }
-    efforts.push(normalized);
+
+    const value = rawValue.trim();
+    if (!value) {
+      continue;
+    }
+
+    const key = value.toLowerCase();
+    if (dedupe.has(key)) {
+      continue;
+    }
+
+    dedupe.add(key);
+    variants.push(value);
   }
 
   const order = new Map<string, number>();
@@ -61,9 +77,11 @@ function extractEffortVariants(modelRecord: Record<string, unknown>): EffortLeve
     order.set(value, index);
   });
 
-  return efforts.sort((left, right) => {
-    const leftOrder = order.get(left) ?? Number.MAX_SAFE_INTEGER;
-    const rightOrder = order.get(right) ?? Number.MAX_SAFE_INTEGER;
+  return variants.sort((left, right) => {
+    const leftNormalized = normalizeEffortLevel(left);
+    const rightNormalized = normalizeEffortLevel(right);
+    const leftOrder = leftNormalized ? (order.get(leftNormalized) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = rightNormalized ? (order.get(rightNormalized) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
     if (leftOrder !== rightOrder) {
       return leftOrder - rightOrder;
     }
@@ -74,7 +92,7 @@ function extractEffortVariants(modelRecord: Record<string, unknown>): EffortLeve
 function extractProviderModels(provider: unknown): Array<{
   id: string;
   name: string;
-  variants: EffortLevel[];
+  variants: string[];
 }> {
   if (!provider || typeof provider !== 'object') {
     return [];
@@ -87,7 +105,7 @@ function extractProviderModels(provider: unknown): Array<{
 
   const record = provider as Record<string, unknown>;
   const rawModels = record.models;
-  const models: Array<{ id: string; name: string; variants: EffortLevel[] }> = [];
+  const models: Array<{ id: string; name: string; variants: string[] }> = [];
   const dedupe = new Set<string>();
 
   const pushModel = (rawModel: unknown, fallbackId?: string): void => {

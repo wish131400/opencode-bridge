@@ -60,11 +60,14 @@
         :model-label="selectedModelLabel"
         :effort-label="selectedEffortLabel"
         :agent-label="selectedAgentLabel"
+        :terminal-visible="isPanelVisible('terminal')"
+        :workspace-directory="workspaceDirectory || undefined"
         @submit="handleSubmit"
         @abort="handleAbort"
         @reconnect="handleReconnect"
         @load-more="handleLoadMoreHistory"
         @revert="handleRevert"
+        @close-terminal="closeTerminalPanel"
         @update:draft="composerDraft = $event"
         @update:model-selection="updateActiveModel($event.providerId, $event.modelId)"
         @update:variant="updateActiveVariant($event)"
@@ -89,10 +92,6 @@
           <TaskPanel
             v-else-if="panel.key === 'board'"
             :tasks="tasks"
-          />
-          <TerminalPanel
-            v-else
-            :directory="workspaceDirectory || undefined"
           />
         </aside>
       </template>
@@ -182,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
@@ -201,10 +200,7 @@ import {
 import ChatView from './ChatView.vue'
 import PermissionDialog from './PermissionDialog.vue'
 import SessionSidebar from './SessionSidebar.vue'
-import TaskPanel from './TaskPanel.vue'
-import FileExplorer from './side-panels/FileExplorer.vue'
-import GitPanel from './side-panels/GitPanel.vue'
-import TerminalPanel from './side-panels/TerminalPanel.vue'
+import { formatVariantLabel, resolveSupportedVariant } from '../../composables/chat-model'
 import { useChatMessages } from '../../composables/useChatMessages'
 import { useChatSessions } from '../../composables/useChatSessions'
 import { useConfigStore } from '../../stores/config'
@@ -221,6 +217,9 @@ interface SessionPreference {
 
 const DEFAULT_EFFORT_OPTIONS = ['none', 'minimal', 'low', 'medium', 'high', 'max', 'xhigh']
 const DRAFT_PREFERENCE_KEY = '__draft__'
+const TaskPanel = defineAsyncComponent(() => import('./TaskPanel.vue'))
+const FileExplorer = defineAsyncComponent(() => import('./side-panels/FileExplorer.vue'))
+const GitPanel = defineAsyncComponent(() => import('./side-panels/GitPanel.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -274,6 +273,7 @@ const createBrowserError = ref('')
 const createPathInput = ref('')
 const composerDraft = ref('')
 const sessionPreferences = ref<Record<string, SessionPreference>>({})
+let workspaceCatalogPromise: Promise<void> | null = null
 
 const createForm = ref({
   title: '',
@@ -340,7 +340,7 @@ const workspaceOptions = computed(() => {
 
   return Array.from(merged.values()).sort((left, right) => left.directory.localeCompare(right.directory, 'zh-Hans-CN'))
 })
-const visiblePanels = computed(() => panelDefinitions.filter(panel => openPanels.value.includes(panel.key)))
+const visiblePanels = computed(() => panelDefinitions.filter(panel => panel.key !== 'terminal' && openPanels.value.includes(panel.key)))
 const activePreferenceKey = computed(() => activeSessionId.value || DRAFT_PREFERENCE_KEY)
 const activePreference = computed<SessionPreference>(() => {
   return sessionPreferences.value[activePreferenceKey.value] || {
@@ -352,13 +352,19 @@ const activePreference = computed<SessionPreference>(() => {
 })
 const currentEffortOptions = computed(() => {
   const model = findModel(activePreference.value.providerId, activePreference.value.modelId)
-  return model?.variants?.length ? model.variants : [...DEFAULT_EFFORT_OPTIONS]
+  if (model) {
+    return [...model.variants]
+  }
+
+  return activePreference.value.providerId || activePreference.value.modelId
+    ? []
+    : [...DEFAULT_EFFORT_OPTIONS]
 })
 const selectedModelLabel = computed(() => {
   const { providerId, modelId } = activePreference.value
   return providerId && modelId ? `${providerId}/${modelId}` : '默认'
 })
-const selectedEffortLabel = computed(() => activePreference.value.variant || '默认')
+const selectedEffortLabel = computed(() => formatVariantLabel(activePreference.value.variant))
 const selectedAgentLabel = computed(() => activePreference.value.agentName || '默认')
 const createDirectoryEntries = computed(() => {
   return (createBrowserListing.value?.entries || []).filter((entry: WorkspaceFileEntry) => entry.type === 'directory')
@@ -375,18 +381,23 @@ const sidebarStyle = computed(() => ({
 
 let activeResize: { target: ResizeTarget; startX: number; initialWidth: number } | null = null
 
+// 当模型目录加载/更新后，重新验证当前选中的 variant 是否仍被新模型支持
+watch(currentEffortOptions, (nextOptions) => {
+  const currentVariant = activePreference.value.variant
+  if (!currentVariant) return
+
+  const resolved = resolveSupportedVariant(currentVariant, nextOptions)
+  if (resolved !== currentVariant) {
+    writePreference(activePreferenceKey.value, {
+      ...activePreference.value,
+      variant: resolved,
+    })
+  }
+})
+
 onMounted(async () => {
   document.addEventListener('keydown', handleWorkspaceKeydown)
-  const loaded = await refresh()
-  await Promise.all([
-    loadWorkspaceCatalog(),
-    loadAgents(),
-    loadModelCatalog(),
-  ])
-
-  if (!activeSessionId.value && loaded.length > 0) {
-    await router.replace(`/chat/${loaded[0].id}`)
-  }
+  void bootstrapWorkspace()
 })
 
 onBeforeUnmount(() => {
@@ -461,26 +472,17 @@ function updateActiveModel(providerId?: string, modelId?: string): void {
   }
 
   if (!providerId || !modelId) {
-    nextPreference.variant = undefined
+    nextPreference.variant = resolveSupportedVariant(nextPreference.variant, DEFAULT_EFFORT_OPTIONS)
   } else {
-    const supported = findModel(providerId, modelId)?.variants || DEFAULT_EFFORT_OPTIONS
-    if (nextPreference.variant && !supported.includes(nextPreference.variant)) {
-      nextPreference.variant = undefined
-    }
+    const supported = findModel(providerId, modelId)?.variants || []
+    nextPreference.variant = resolveSupportedVariant(nextPreference.variant, supported)
   }
 
   writePreference(activePreferenceKey.value, nextPreference)
 }
 
 function updateActiveVariant(variant?: string): void {
-  const nextVariant = typeof variant === 'string' && variant.trim() ? variant.trim() : undefined
-  if (nextVariant && !currentEffortOptions.value.includes(nextVariant)) {
-    writePreference(activePreferenceKey.value, {
-      ...activePreference.value,
-      variant: undefined,
-    })
-    return
-  }
+  const nextVariant = resolveSupportedVariant(variant, currentEffortOptions.value)
 
   writePreference(activePreferenceKey.value, {
     ...activePreference.value,
@@ -567,6 +569,10 @@ function togglePanel(panelKey: PanelKey): void {
   openPanels.value = [...openPanels.value, panelKey]
 }
 
+function closeTerminalPanel(): void {
+  openPanels.value = openPanels.value.filter(item => item !== 'terminal')
+}
+
 function startResize(target: ResizeTarget, event: MouseEvent): void {
   const initialWidth = target === 'sidebar' ? sidebarWidth.value : panelWidths.value[target]
   activeResize = {
@@ -606,6 +612,37 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+async function bootstrapWorkspace(): Promise<void> {
+  try {
+    const loaded = await refresh()
+    if (!activeSessionId.value && loaded.length > 0) {
+      await router.replace(`/chat/${loaded[0].id}`)
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '会话列表加载失败')
+  } finally {
+    scheduleDeferredMetadataLoad()
+  }
+}
+
+function scheduleDeferredMetadataLoad(): void {
+  const run = () => {
+    void loadAgents()
+    void loadModelCatalog()
+  }
+
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+  }
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    idleWindow.requestIdleCallback(() => run(), { timeout: 1200 })
+    return
+  }
+
+  window.setTimeout(run, 180)
+}
+
 async function ensureSession(): Promise<string> {
   if (activeSessionId.value) return activeSessionId.value
   const session = await createSession()
@@ -623,6 +660,23 @@ async function loadWorkspaceCatalog(): Promise<void> {
   } finally {
     workspaceCatalogLoading.value = false
   }
+}
+
+async function ensureWorkspaceCatalogLoaded(): Promise<void> {
+  if (workspaceCatalog.value.length > 0) {
+    return
+  }
+
+  if (workspaceCatalogPromise) {
+    await workspaceCatalogPromise
+    return
+  }
+
+  workspaceCatalogPromise = loadWorkspaceCatalog().finally(() => {
+    workspaceCatalogPromise = null
+  })
+
+  await workspaceCatalogPromise
 }
 
 async function loadAgents(): Promise<void> {
@@ -643,6 +697,21 @@ async function loadModelCatalog(): Promise<void> {
 }
 
 function openCreateDialog(initialDirectory?: string): void {
+  void ensureWorkspaceCatalogLoaded().then(() => {
+    if (!createDialogVisible.value || createBrowserRoot.value) {
+      return
+    }
+
+    const fallbackRoot = normalizePath(workspaceOptions.value[0]?.directory)
+    if (!fallbackRoot) {
+      return
+    }
+
+    createBrowserRoot.value = fallbackRoot
+    createPathInput.value = fallbackRoot
+    void handleCreatePathGo()
+  })
+
   createForm.value = {
     title: '',
   }
@@ -797,6 +866,17 @@ async function handleSubmit(payload: {
   variant?: string
   agent?: string
 }): Promise<void> {
+  const immediateCommand = resolveImmediateCommand(payload.text)
+  if (immediateCommand === 'undo') {
+    await handleUndoCommand()
+    return
+  }
+
+  if (immediateCommand === 'abort') {
+    await handleAbort()
+    return
+  }
+
   const sessionId = await ensureSession()
   touchSession(sessionId)
   await sendText({
@@ -807,6 +887,30 @@ async function handleSubmit(payload: {
     variant: payload.variant,
     agent: payload.agent,
   })
+}
+
+function resolveImmediateCommand(text: string): 'undo' | 'abort' | null {
+  const normalized = text.trim().toLowerCase()
+  if (normalized === '/undo' || normalized === '/revert') {
+    return 'undo'
+  }
+
+  if (normalized === '/stop' || normalized === '/abort' || normalized === '/cancel') {
+    return 'abort'
+  }
+
+  return null
+}
+
+function findLatestRevertableMessage(): ChatMessageVm | null {
+  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+    const message = messages.value[index]
+    if (message.role === 'user' || message.role === 'assistant') {
+      return message
+    }
+  }
+
+  return null
 }
 
 async function handleLoadMoreHistory(): Promise<void> {
@@ -823,6 +927,41 @@ async function handleAbort(): Promise<void> {
     ElMessage.error(error instanceof Error ? error.message : '中断失败')
   } finally {
     aborting.value = false
+  }
+}
+
+async function handleUndoCommand(): Promise<void> {
+  if (!activeSessionId.value) {
+    ElMessage.warning('当前没有可回退的对话')
+    return
+  }
+
+  if (aborting.value || sending.value) {
+    return
+  }
+
+  const latestMessage = findLatestRevertableMessage()
+  const target = latestMessage ? buildRevertTarget(latestMessage) : null
+  if (!target) {
+    ElMessage.warning('当前没有可回退的对话')
+    return
+  }
+
+  composerDraft.value = target.draftText
+  discardFromMessage(target.trimMessageId)
+
+  if (!target.revertMessageId) {
+    ElMessage.success('已回退上一轮')
+    return
+  }
+
+  try {
+    await chatApi.undoSession(activeSessionId.value)
+    await reloadMessages()
+    ElMessage.success('已回退上一轮')
+  } catch (error) {
+    await reloadMessages()
+    ElMessage.error(error instanceof Error ? error.message : '回退失败')
   }
 }
 

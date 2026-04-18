@@ -184,7 +184,27 @@ async function loadDirectory(nextPath = ''): Promise<void> {
       }
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '读取目录失败'
+    // 改进错误处理，提供更友好的错误消息
+    let errorMessage = '读取目录失败'
+
+    if (err instanceof Error) {
+      const error_message = err.message.toLowerCase()
+
+      // 检查是否是权限问题
+      if (error_message.includes('403') || error_message.includes('forbidden')) {
+        errorMessage = '权限不足：无法访问当前目录，请检查目录权限'
+      }
+      // 检查是否是目录不存在
+      else if (error_message.includes('no such file') || error_message.includes('directory not found')) {
+        errorMessage = '目录不存在：请先创建目标目录或检查路径'
+      }
+      // 其他错误
+      else {
+        errorMessage = err.message
+      }
+    }
+
+    error.value = errorMessage
   } finally {
     if (currentVersion === listVersion) {
       loading.value = false
@@ -224,7 +244,28 @@ async function openFile(entry: WorkspaceFileEntry, announce = true): Promise<voi
     }
   } catch (err) {
     if (currentVersion !== previewVersion) return
-    ElMessage.error(err instanceof Error ? err.message : '读取文件失败')
+
+    // 改进错误处理，提供更友好的错误消息
+    let errorMessage = '读取文件失败'
+
+    if (err instanceof Error) {
+      const error_message = err.message.toLowerCase()
+
+      // 检查是否是权限问题
+      if (error_message.includes('403') || error_message.includes('forbidden')) {
+        errorMessage = '权限不足：无法读取该文件，请检查文件权限'
+      }
+      // 检查是否是文件不存在
+      else if (error_message.includes('no such file') || error_message.includes('file not found')) {
+        errorMessage = '文件不存在：该文件可能已被删除或移动'
+      }
+      // 其他错误
+      else {
+        errorMessage = err.message
+      }
+    }
+
+    ElMessage.error(errorMessage)
   } finally {
     if (currentVersion === previewVersion) {
       previewLoading.value = false

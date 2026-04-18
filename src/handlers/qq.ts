@@ -10,6 +10,7 @@ import { opencodeClient } from '../opencode/client.js';
 import { outputBuffer } from '../opencode/output-buffer.js';
 import { chatSessionStore } from '../store/chat-session.js';
 import { parseCommand, type ParsedCommand } from '../commands/parser.js';
+import { normalizeEffortLevel, type EffortLevel } from '../commands/effort.js';
 import { DirectoryPolicy } from '../utils/directory-policy.js';
 import { buildSessionTimestamp } from '../utils/session-title.js';
 import { shouldSkipGroupMessage } from '../utils/group-mention.js';
@@ -17,7 +18,6 @@ import { permissionHandler } from '../permissions/handler.js';
 import { questionHandler, type PendingQuestion } from '../opencode/question-handler.js';
 import { parseQuestionAnswerText } from '../opencode/question-parser.js';
 import type { PlatformMessageEvent, PlatformSender } from '../platform/types.js';
-import type { EffortLevel } from '../commands/effort.js';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { promises as fs } from 'fs';
@@ -1052,7 +1052,59 @@ export class QQHandler {
       const sessionData = chatSessionStore.getSessionByConversation('qq', chatId);
       const directory = sessionData?.resolvedDirectory;
 
-      const variant = promptEffort || config?.preferredEffort;
+      let variant = promptEffort || config?.preferredEffort;
+
+      // 验证 variant 是否与当前模型兼容
+      if (variant && providerId && modelId) {
+        try {
+          const providersPayload = await opencodeClient.getProviders();
+          const providers = Array.isArray(providersPayload.providers) ? providersPayload.providers : [];
+          const providerLower = providerId.toLowerCase();
+          const modelLower = modelId.toLowerCase();
+
+          for (const provider of providers) {
+            if (!provider || typeof provider !== 'object') continue;
+            const providerRecord = provider as Record<string, unknown>;
+            const providerIdRaw = typeof providerRecord.id === 'string' ? providerRecord.id.trim() : '';
+            if (!providerIdRaw || providerIdRaw.toLowerCase() !== providerLower) continue;
+
+            const modelsRaw = providerRecord.models;
+            const modelList = Array.isArray(modelsRaw)
+              ? modelsRaw
+              : (modelsRaw && typeof modelsRaw === 'object' ? Object.values(modelsRaw) : []);
+
+            for (const modelItem of modelList) {
+              if (!modelItem || typeof modelItem !== 'object') continue;
+              const modelRecord = modelItem as Record<string, unknown>;
+              const modelIdRaw = typeof modelRecord.id === 'string'
+                ? modelRecord.id.trim()
+                : (typeof modelRecord.modelID === 'string' ? modelRecord.modelID.trim() : '');
+              if (!modelIdRaw || modelIdRaw.toLowerCase() !== modelLower) continue;
+
+              // 解析模型支持的 variants
+              const variants = modelRecord.variants;
+              if (variants && typeof variants === 'object' && !Array.isArray(variants)) {
+                const supportedVariants: EffortLevel[] = [];
+                for (const key of Object.keys(variants as Record<string, unknown>)) {
+                  const normalized = normalizeEffortLevel(key);
+                  if (normalized && normalized !== 'none' && !supportedVariants.includes(normalized)) {
+                    supportedVariants.push(normalized);
+                  }
+                }
+                // 如果当前 variant 不在支持列表中，清除它
+                if (supportedVariants.length > 0 && !supportedVariants.includes(variant)) {
+                  variant = undefined;
+                }
+              }
+              break;
+            }
+            break;
+          }
+        } catch (error) {
+          console.debug('[QQ] 获取模型支持的 variants 失败，跳过验证:', error instanceof Error ? error.message : String(error));
+        }
+      }
+
       await opencodeClient.sendMessagePartsAsync(
         sessionId,
         parts,

@@ -167,7 +167,7 @@ export const opencodeConfig = {
   get port() { return parseInt(process.env.OPENCODE_PORT || '4096', 10); },
   get serverUsername() { return process.env.OPENCODE_SERVER_USERNAME?.trim() || 'opencode'; },
   get serverPassword() { return process.env.OPENCODE_SERVER_PASSWORD?.trim() || undefined; },
-  get autoStart() { return parseBooleanEnv(process.env.OPENCODE_AUTO_START, false); },
+  get autoStart() { return parseBooleanEnv(process.env.OPENCODE_AUTO_START, true); },
   get autoStartCmd() { return process.env.OPENCODE_AUTO_START_CMD?.trim() || 'opencode serve'; },
   get baseUrl() {
     return `http://${this.host}:${this.port}`;

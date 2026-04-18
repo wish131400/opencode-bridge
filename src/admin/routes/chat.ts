@@ -11,6 +11,7 @@
  * - PATCH  /api/chat/sessions/:id      - Rename session
  * - GET    /api/chat/sessions/:id/messages - Get session messages
  * - POST   /api/chat/sessions/:id/revert - Revert session to a message
+ * - POST   /api/chat/sessions/:id/undo - Undo last interaction
  * - POST   /api/chat/sessions/:id/prompt - Send message
  * - POST   /api/chat/sessions/:id/abort - Abort session
  * - GET    /api/chat/events            - SSE event stream

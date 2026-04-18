@@ -70,15 +70,24 @@
       @update:variant="$emit('update:variant', $event)"
       @update:agent-name="$emit('update:agentName', $event)"
     />
+
+    <TerminalPanel
+      v-if="terminalVisible"
+      :directory="workspaceDirectory"
+      @close="$emit('close-terminal')"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import MessageInput from './MessageInput.vue'
 import MessageList from './MessageList.vue'
 import SessionHeader from './SessionHeader.vue'
 import type { ChatAgentInfo, ChatModelProviderInfo, ChatSessionSummary } from '../../api'
 import type { ChatMessageVm, ChatStreamState } from '../../composables/chat-model'
+
+const TerminalPanel = defineAsyncComponent(() => import('./side-panels/TerminalPanel.vue'))
 
 defineProps<{
   session: ChatSessionSummary | null
@@ -102,6 +111,8 @@ defineProps<{
   modelLabel: string
   effortLabel: string
   agentLabel: string
+  terminalVisible: boolean
+  workspaceDirectory?: string
 }>()
 
 defineEmits<{
@@ -110,6 +121,7 @@ defineEmits<{
   reconnect: []
   loadMore: []
   revert: [ChatMessageVm]
+  'close-terminal': []
   'update:draft': [string]
   'update:model-selection': [{ providerId?: string; modelId?: string }]
   'update:providerId': [string?]

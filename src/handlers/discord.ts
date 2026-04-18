@@ -1713,7 +1713,16 @@ class DiscordHandler {
 
     const session = chatSessionStore.getSessionByConversation('discord', event.conversationId);
     const preferredModel = this.parseProviderModel(session?.preferredModel);
-    const variant = effortParsed.effort || session?.preferredEffort;
+    let variant = effortParsed.effort || session?.preferredEffort;
+
+    // 验证 variant 是否与当前模型兼容
+    if (variant) {
+      const support = await this.getEffortSupportInfo(event.conversationId);
+      if (support.supportedEfforts.length > 0 && !support.supportedEfforts.includes(variant)) {
+        // 当前模型不支持该 variant，不传递（让模型自动选择）
+        variant = undefined;
+      }
+    }
 
     const pendingMessageId = await this.safePending(event);
     try {

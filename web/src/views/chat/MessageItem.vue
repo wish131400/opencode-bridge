@@ -1,8 +1,8 @@
 <template>
   <article :class="['message-item', `message-item--${message.role}`]">
-    <div class="message-card" @click="expanded = !expanded">
-      <header class="message-head">
-        <div class="meta-left">
+    <div class="message-shell">
+      <header class="message-meta">
+        <div class="meta-main">
           <span :class="['role', message.role === 'user' ? 'role--user' : 'role--assistant']">{{ roleLabel }}</span>
           <span class="time">{{ formatTime(message.createdAt) }}</span>
           <span v-if="message.model" class="tag-inline">{{ message.model.providerId }}/{{ message.model.modelId }}</span>
@@ -11,66 +11,57 @@
           <span v-else-if="message.status === 'error'" class="status status--error">出错</span>
         </div>
 
-        <div class="meta-right" @click.stop>
-          <span class="expand-hint">{{ expanded ? '▾' : '▸' }}</span>
+        <div class="meta-actions">
           <el-button text size="small" @click="copyMessage">复制</el-button>
           <el-button text size="small" :disabled="undoDisabled" @click="$emit('revert', message)">回退</el-button>
         </div>
       </header>
 
-      <div v-if="!expanded" class="message-summary">
-        {{ summary }}
-      </div>
+      <div :class="['message-bubble', `message-bubble--${message.role}`, { 'message-bubble--error': message.status === 'error' }]">
+        <AssistantTracePanel
+          v-if="message.role === 'assistant' && (message.reasoning || message.tools.length > 0)"
+          :reasoning="message.reasoning"
+          :tools="message.tools"
+        />
 
-      <div v-else class="message-body" @click.stop>
-        <Message :role="message.role" :error="message.status === 'error'">
-          <template v-for="block in blocks" :key="block.id">
-            <div v-if="block.type === 'text'" class="block block--text">
-              <StreamingMessage
-                v-if="block.streaming"
-                :text="message.text"
-              />
-              <template v-else>
-                <template v-for="segment in block.segments" :key="segment.id">
-                  <Markdown v-if="segment.type === 'markdown'" :source="segment.content" />
-                  <CodeBlock v-else :code="segment.code" :language="segment.language" />
-                </template>
-              </template>
-            </div>
-
-            <Reasoning
-              v-else-if="block.type === 'reasoning'"
-              :source="block.text"
-            />
-
-            <Tool
-              v-else-if="block.type === 'tool'"
-              :tool="block.tool"
-            />
-
-            <div v-else class="error-text">{{ block.text }}</div>
+        <div v-if="message.text" class="message-main">
+          <StreamingMessage
+            v-if="message.role === 'assistant' && message.status === 'streaming'"
+            :text="message.text"
+          />
+          <template v-else>
+            <template v-for="segment in textSegments" :key="segment.id">
+              <Markdown v-if="segment.type === 'markdown'" :source="segment.content" />
+              <CodeBlock v-else :code="segment.code" :language="segment.language" />
+            </template>
           </template>
-        </Message>
+        </div>
 
-        <footer v-if="message.usage" class="usage">
-          输入 {{ message.usage.input }} / 输出 {{ message.usage.output }} / 推理 {{ message.usage.reasoning }}
-        </footer>
+        <div v-else-if="message.role === 'assistant' && message.status === 'streaming'" class="message-placeholder">
+          正在生成回复…
+        </div>
+
+        <div v-if="message.error" class="error-text">{{ message.error }}</div>
       </div>
+
+      <footer v-if="message.usage && message.role === 'assistant'" class="usage">
+        输入 {{ message.usage.input }} / 输出 {{ message.usage.output }} / 推理 {{ message.usage.reasoning }}
+        <template v-if="message.usage.cost != null"> / 费用 ${{ message.usage.cost.toFixed(4) }}</template>
+      </footer>
     </div>
   </article>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
-import CodeBlock from '../../components/ai-elements/CodeBlock.vue'
-import Markdown from '../../components/ai-elements/Markdown.vue'
-import Message from '../../components/ai-elements/Message.vue'
-import Reasoning from '../../components/ai-elements/Reasoning.vue'
-import Tool from '../../components/ai-elements/Tool.vue'
 import { splitMarkdownSegments } from '../../components/ai-elements/markdown-utils'
+import AssistantTracePanel from './AssistantTracePanel.vue'
 import StreamingMessage from './StreamingMessage.vue'
-import type { ChatMessageVm, ChatToolCallVm } from '../../composables/chat-model'
+import type { ChatMessageVm } from '../../composables/chat-model'
+
+const CodeBlock = defineAsyncComponent(() => import('../../components/ai-elements/CodeBlock.vue'))
+const Markdown = defineAsyncComponent(() => import('../../components/ai-elements/Markdown.vue'))
 
 const props = defineProps<{
   message: ChatMessageVm
@@ -82,98 +73,16 @@ defineEmits<{
   revert: [ChatMessageVm]
 }>()
 
-type MessageBlock =
-  | { id: string; type: 'text'; segments: ReturnType<typeof splitMarkdownSegments>; streaming: boolean }
-  | { id: string; type: 'reasoning'; text: string }
-  | { id: string; type: 'tool'; tool: ChatToolCallVm }
-  | { id: string; type: 'error'; text: string }
-
-const expanded = ref(Boolean(props.autoExpand))
-
-watch(
-  () => props.autoExpand,
-  value => {
-    if (value) {
-      expanded.value = true
-    }
-  },
-  { immediate: true }
-)
-
 const roleLabel = computed(() => props.message.role === 'user' ? '用户' : 'chat:opencode')
-
-const blocks = computed<MessageBlock[]>(() => {
-  const nextBlocks: MessageBlock[] = []
-
-  if (props.message.text || props.message.role === 'assistant') {
-    nextBlocks.push({
-      id: `${props.message.id}-text`,
-      type: 'text',
-      segments: splitMarkdownSegments(props.message.text),
-      streaming: props.message.role === 'assistant' && props.message.status === 'streaming',
-    })
-  }
-
-  if (props.message.reasoning) {
-    nextBlocks.push({
-      id: `${props.message.id}-reasoning`,
-      type: 'reasoning',
-      text: props.message.reasoning,
-    })
-  }
-
-  for (const tool of props.message.tools) {
-    nextBlocks.push({
-      id: `${props.message.id}-tool-${tool.id}`,
-      type: 'tool',
-      tool,
-    })
-  }
-
-  if (props.message.error) {
-    nextBlocks.push({
-      id: `${props.message.id}-error`,
-      type: 'error',
-      text: props.message.error,
-    })
-  }
-
-  return nextBlocks
-})
-
-const summary = computed(() => {
-  const text = compactText(props.message.text)
-  if (text) return trimSummary(text)
-
-  const reasoning = compactText(props.message.reasoning)
-  if (reasoning) return trimSummary(`推理: ${reasoning}`)
-
-  if (props.message.tools.length > 0) {
-    const labels = props.message.tools
-      .slice(0, 2)
-      .map(tool => tool.title || tool.name)
-      .join('，')
-    return trimSummary(`工具: ${labels}${props.message.tools.length > 2 ? ` 等 ${props.message.tools.length} 项` : ''}`)
-  }
-
-  if (props.message.error) {
-    return trimSummary(`错误: ${compactText(props.message.error)}`)
-  }
-
-  return '空消息'
-})
+const textSegments = computed(() => splitMarkdownSegments(props.message.text))
 
 const copyText = computed(() => {
   const sections: string[] = []
   const text = compactText(props.message.text)
-  if (text) {
-    sections.push(text)
-  }
+  if (text) sections.push(text)
 
   const reasoning = compactText(props.message.reasoning)
-  if (reasoning) {
-    sections.push(`推理\n${reasoning}`)
-  }
+  if (reasoning) sections.push(`思维链\n${reasoning}`)
 
   for (const tool of props.message.tools) {
     const label = tool.title || tool.name
@@ -190,10 +99,6 @@ const copyText = computed(() => {
 
 function compactText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
-}
-
-function trimSummary(value: string): string {
-  return value.length > 120 ? `${value.slice(0, 120)}…` : value
 }
 
 function formatTime(timestamp: number): string {
@@ -223,7 +128,7 @@ async function copyToClipboard(text: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     return
   }
-  // Fallback for non-secure contexts
+
   const textarea = document.createElement('textarea')
   textarea.value = text
   textarea.style.position = 'fixed'
@@ -242,120 +147,143 @@ async function copyToClipboard(text: string): Promise<void> {
 <style scoped>
 .message-item {
   display: flex;
-  padding: 4px 12px;
-}
-
-.message-item--assistant,
-.message-item--user {
-  justify-content: stretch;
-}
-
-.message-card {
   width: 100%;
-  border-bottom: 1px solid #eceff3;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
-.message-card:hover {
-  background: #f9fafb;
+.message-item--user {
+  justify-content: flex-end;
 }
 
-.message-head {
+.message-item--assistant {
+  justify-content: flex-start;
+}
+
+.message-shell {
+  max-width: min(100%, 54rem);
+  display: grid;
+  gap: 6px;
+}
+
+.message-item--user .message-shell {
+  justify-items: end;
+}
+
+.message-item--assistant .message-shell {
+  justify-items: start;
+}
+
+.message-meta {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 0 2px;
 }
 
-.meta-left,
-.meta-right {
+.meta-main,
+.meta-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .role {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.role--user {
-  color: #2563eb;
+  font-size: 12px;
   font-weight: 700;
 }
 
+.role--user {
+  color: #1d4ed8;
+}
+
 .role--assistant {
-  color: #059669;
-  font-style: italic;
+  color: #0f766e;
 }
 
-.time {
-  font-size: 13px;
-  color: #9ca3af;
-}
-
+.time,
 .tag-inline {
-  font-size: 13px;
-  color: #9ca3af;
-  font-style: italic;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .status {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .status--streaming {
-  color: #d97706;
+  color: #b45309;
 }
 
 .status--error {
-  color: #dc2626;
+  color: #b91c1c;
 }
 
-.expand-hint {
+.message-bubble {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.message-bubble--user {
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  color: #eff6ff;
+}
+
+.message-bubble--user :deep(.markdown-body),
+.message-bubble--user :deep(.markdown-body a) {
+  color: inherit;
+}
+
+.message-bubble--user :deep(.markdown-body code) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #eff6ff;
+}
+
+.message-bubble--assistant {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #16304d;
+}
+
+.message-bubble--error {
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.message-main {
+  display: grid;
+  gap: 12px;
+}
+
+.message-placeholder {
   font-size: 13px;
-  color: #9ca3af;
-  user-select: none;
-}
-
-.message-summary {
-  padding: 0 10px 8px;
-  font-size: 13px;
-  color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.message-body {
-  padding: 0 10px 10px;
-  cursor: default;
-}
-
-.block + .block {
-  margin-top: 10px;
-}
-
-.block--text:empty {
-  min-height: 1px;
+  color: #64748b;
 }
 
 .error-text {
-  color: #dc2626;
+  margin-top: 10px;
+  color: #b91c1c;
   font-size: 13px;
   line-height: 1.6;
 }
 
 .usage {
-  margin-top: 6px;
-  color: #9ca3af;
   font-size: 12px;
-  font-style: italic;
+  color: #94a3b8;
+  padding: 0 2px;
+}
+
+@media (max-width: 768px) {
+  .message-shell {
+    max-width: 100%;
+  }
+
+  .message-bubble {
+    padding: 12px 14px;
+  }
 }
 </style>

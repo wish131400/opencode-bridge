@@ -367,4 +367,59 @@ export function mergeChatMessages(history: ChatMessageVm[], current: ChatMessage
   return Array.from(merged.values()).sort((left, right) => left.createdAt - right.createdAt)
 }
 
+// 支持的思考强度选项映射，用于标准化不同模型的参数名称
+export const EFFORT_VARIANT_MAP: Record<string, string> = {
+  'none': 'none',
+  'minimal': 'minimal',
+  'low': 'low',
+  'medium': 'medium',
+  'high': 'high',
+  'max': 'max',
+  'xhigh': 'xhigh',
+  'fast': 'low',
+  'balanced': 'high',
+  'deep': 'xhigh',
+  // 兼容其他可能的参数名称
+  'thinking_low': 'low',
+  'thinking_medium': 'medium',
+  'thinking_high': 'high',
+  'reasoning_low': 'low',
+  'reasoning_medium': 'medium',
+  'reasoning_high': 'high',
+}
+
+// 获取标准化的思考强度选项
+export function normalizeVariant(variant: string): string {
+  const normalized = variant.trim().toLowerCase()
+  return EFFORT_VARIANT_MAP[normalized] || variant
+}
+
+export function formatVariantLabel(variant?: string): string {
+  if (!variant) return '默认'
+  return normalizeVariant(variant)
+}
+
+export function resolveSupportedVariant(
+  variant: string | undefined,
+  supportedVariants: string[]
+): string | undefined {
+  const nextVariant = typeof variant === 'string' ? variant.trim() : ''
+  if (!nextVariant) {
+    return undefined
+  }
+
+  const exactMatch = supportedVariants.find(item => item === nextVariant)
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  const normalized = normalizeVariant(nextVariant)
+  return supportedVariants.find(item => normalizeVariant(item) === normalized)
+}
+
+// 检查模型是否支持特定的思考强度
+export function isVariantSupported(variant: string, supportedVariants: string[]): boolean {
+  return Boolean(resolveSupportedVariant(variant, supportedVariants))
+}
+
 export type { ChatPermissionRequest, ChatTodoItem }
