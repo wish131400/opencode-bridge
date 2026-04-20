@@ -27,6 +27,7 @@ export interface ChatMessageMeta {
   id: string;
   role: 'user' | 'assistant';
   createdAt: number;
+  parentId?: string;
   model?: { providerId: string; modelId: string };
   agent?: string;
 }

@@ -57,14 +57,7 @@ import Conversation from '../../components/ai-elements/Conversation.vue'
 import MessageItem from './MessageItem.vue'
 import TurnItem from './TurnItem.vue'
 import type { ChatSessionSummary } from '../../api'
-import type { ChatMessageVm } from '../../composables/chat-model'
-
-interface ConversationTurn {
-  id: string
-  userMessage: ChatMessageVm | null
-  assistantMessages: ChatMessageVm[]
-  autoExpand: boolean
-}
+import { buildConversationTurns, type ChatMessageVm } from '../../composables/chat-model'
 
 const props = defineProps<{
   session: ChatSessionSummary | null
@@ -81,54 +74,7 @@ defineEmits<{
   revert: [ChatMessageVm]
 }>()
 
-/**
- * 将消息列表按"对话轮次"分组：
- * - 每个 user 消息开启一个新轮次
- * - 后续的所有 assistant 消息归入同一轮次
- * - 直到遇到下一个 user 消息
- * - 开头如果是 assistant 消息（无前置 user），单独成组
- */
-const turns = computed<ConversationTurn[]>(() => {
-  const result: ConversationTurn[] = []
-  let currentTurn: ConversationTurn | null = null
-
-  for (const msg of props.messages) {
-    if (msg.role === 'user') {
-      // 新轮次
-      currentTurn = {
-        id: `turn-${msg.id}`,
-        userMessage: msg,
-        assistantMessages: [],
-        autoExpand: false,
-      }
-      result.push(currentTurn)
-    } else {
-      // assistant 消息
-      if (!currentTurn) {
-        // 没有前置 user 消息，单独成组
-        currentTurn = {
-          id: `turn-orphan-${msg.id}`,
-          userMessage: null,
-          assistantMessages: [msg],
-          autoExpand: false,
-        }
-        result.push(currentTurn)
-      } else {
-        currentTurn.assistantMessages.push(msg)
-      }
-    }
-  }
-
-  // 最后一个轮次如果有流式 assistant 消息，自动展开
-  if (result.length > 0) {
-    const lastTurn = result[result.length - 1]
-    if (lastTurn.assistantMessages.some(msg => msg.status === 'streaming')) {
-      lastTurn.autoExpand = true
-    }
-  }
-
-  return result
-})
+const turns = computed(() => buildConversationTurns(props.messages))
 </script>
 
 <style scoped>

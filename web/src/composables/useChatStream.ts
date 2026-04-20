@@ -1,6 +1,7 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import type { ChatEvent } from '../api'
 import type { ChatStreamState } from './chat-model'
+import { parseEventSeq, resolveReplaySince } from './chat-stream-utils'
 
 const CHAT_EVENT_TYPES = [
   'message_start',
@@ -36,6 +37,7 @@ export function useChatStream(
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
   let currentSessionId: string | null = null
+  let lastEventSeq: number | null = null
   let intentionalClose = false
 
   function clearReconnectTimer(): void {
@@ -74,6 +76,11 @@ export function useChatStream(
   }
 
   function connect(nextSessionId: string): void {
+    const sinceSeq = resolveReplaySince(currentSessionId, nextSessionId, lastEventSeq)
+    if (sinceSeq == null) {
+      lastEventSeq = null
+    }
+
     // Close previous without triggering reconnect
     intentionalClose = true
     clearReconnectTimer()
@@ -89,6 +96,9 @@ export function useChatStream(
       session_id: nextSessionId,
       token,
     })
+    if (sinceSeq != null) {
+      params.set('since', String(sinceSeq))
+    }
 
     state.value = 'connecting'
     lastError.value = null
@@ -102,7 +112,13 @@ export function useChatStream(
     for (const eventType of CHAT_EVENT_TYPES) {
       source.addEventListener(eventType, payload => {
         try {
-          const event = JSON.parse((payload as MessageEvent<string>).data) as ChatEvent
+          const messageEvent = payload as MessageEvent<string>
+          const eventSeq = parseEventSeq(messageEvent.lastEventId)
+          if (eventSeq != null) {
+            lastEventSeq = eventSeq
+          }
+
+          const event = JSON.parse(messageEvent.data) as ChatEvent
           if (event.type === 'keepalive') return
           if (event.type === 'session_idle') {
             state.value = 'idle'
@@ -148,6 +164,7 @@ export function useChatStream(
       if (!nextSessionId) {
         close()
         currentSessionId = null
+        lastEventSeq = null
         return
       }
       connect(nextSessionId)

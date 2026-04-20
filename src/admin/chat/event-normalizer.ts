@@ -69,6 +69,33 @@ function toTokenUsage(info: Message): ChatTokenUsage | undefined {
   };
 }
 
+function toMessageMeta(info: Message): Extract<ChatEvent, { type: 'message_start' }>['msg'] {
+  return {
+    id: info.id,
+    role: info.role,
+    createdAt: (info.time?.created ?? Math.floor(Date.now() / 1000)) * 1000,
+    ...(info.role === 'assistant' && info.parentID ? { parentId: info.parentID } : {}),
+    ...(info.role === 'user' && info.model?.providerID && info.model?.modelID
+      ? {
+          model: {
+            providerId: info.model.providerID,
+            modelId: info.model.modelID,
+          },
+        }
+      : {}),
+    ...(info.role === 'assistant' && info.providerID && info.modelID
+      ? {
+          model: {
+            providerId: info.providerID,
+            modelId: info.modelID,
+          },
+        }
+      : {}),
+    ...(info.role === 'assistant' && info.mode ? { agent: info.mode } : {}),
+    ...(info.role === 'user' && info.agent ? { agent: info.agent } : {}),
+  };
+}
+
 function toTodos(raw: unknown): ChatTodoItem[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: ChatTodoItem[] = [];
@@ -221,20 +248,12 @@ export class ChatEventNormalizer {
     const state = this.getMessageState(sessionId, msgId);
     state.role = info.role;
 
-    // 首次见到这条 assistant 消息 → message_start
-    if (info.role === 'assistant' && !state.started) {
+    // 首次见到消息 → message_start
+    if (!state.started) {
       state.started = true;
       this.publish(sessionId, {
         type: 'message_start',
-        msg: {
-          id: msgId,
-          role: 'assistant',
-          createdAt: (info.time?.created ?? Math.floor(Date.now() / 1000)) * 1000,
-          model: info.providerID && info.modelID
-            ? { providerId: info.providerID, modelId: info.modelID }
-            : undefined,
-          agent: info.mode,
-        },
+        msg: toMessageMeta(info),
       });
     }
 

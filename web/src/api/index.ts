@@ -437,6 +437,7 @@ export interface ChatMessageMeta {
   id: string
   role: 'user' | 'assistant'
   createdAt: number
+  parentId?: string
   model?: ChatModelRef
   agent?: string
 }
@@ -493,6 +494,7 @@ export interface ChatHistoryMessage {
     id: string
     sessionID: string
     role: 'user' | 'assistant'
+    parentID?: string
     time: {
       created: number
       completed?: number

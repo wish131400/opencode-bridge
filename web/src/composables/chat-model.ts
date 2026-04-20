@@ -27,6 +27,7 @@ export interface ChatMessageVm {
   id: string
   role: 'user' | 'assistant'
   createdAt: number
+  parentId?: string
   text: string
   reasoning: string
   tools: ChatToolCallVm[]
@@ -170,6 +171,7 @@ export function normalizeHistoryMessage(message: ChatHistoryMessage): ChatMessag
     id: message.info.id,
     role: message.info.role,
     createdAt: (message.info.time.created ?? Date.now() / 1000) * 1000,
+    parentId: message.info.role === 'assistant' ? message.info.parentID : undefined,
     text: textParts.join(''),
     reasoning: reasoningParts.join(''),
     tools,
@@ -203,11 +205,68 @@ function createAssistantMessage(msgId: string, createdAt = Date.now()): ChatMess
     id: msgId,
     role: 'assistant',
     createdAt,
+    parentId: undefined,
     text: '',
     reasoning: '',
     tools: [],
     status: 'streaming',
   }
+}
+
+function resolveAssistantCreatedAt(messages: ChatMessageVm[], createdAt: number, parentId?: string): number {
+  if (parentId) {
+    const parentMessage = messages.find(item => item.role === 'user' && item.id === parentId)
+    if (parentMessage && parentMessage.createdAt > createdAt) {
+      return parentMessage.createdAt
+    }
+  }
+
+  const lastMessage = messages[messages.length - 1]
+  if (!lastMessage) {
+    return createdAt
+  }
+
+  // SSE 的 assistant createdAt 只有秒级精度，而 optimistic user 是毫秒级。
+  // 如果 assistant 被排到最新一条 user 前面，会把多轮回复错误地归并到上一轮。
+  if (lastMessage.role === 'user' && lastMessage.createdAt > createdAt) {
+    return lastMessage.createdAt
+  }
+
+  return createdAt
+}
+
+function findLatestOptimisticUser(messages: ChatMessageVm[]): ChatMessageVm | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role === 'user' && message.optimistic) {
+      return message
+    }
+  }
+  return undefined
+}
+
+function syncOptimisticUserMessage(
+  messages: ChatMessageVm[],
+  meta: Extract<ChatEvent, { type: 'message_start' }>['msg']
+): ChatMessageVm | undefined {
+  if (meta.role !== 'user') {
+    return undefined
+  }
+
+  const optimistic = findLatestOptimisticUser(messages)
+  if (!optimistic) {
+    return undefined
+  }
+
+  optimistic.id = meta.id
+  if (typeof meta.createdAt === 'number' && Number.isFinite(meta.createdAt)) {
+    optimistic.createdAt = Math.max(optimistic.createdAt, meta.createdAt)
+  }
+  optimistic.model = meta.model ?? optimistic.model
+  optimistic.agent = meta.agent ?? optimistic.agent
+  optimistic.optimistic = false
+  messages.sort((left, right) => left.createdAt - right.createdAt)
+  return optimistic
 }
 
 function upsertMessage(messages: ChatMessageVm[], message: ChatMessageVm): ChatMessageVm {
@@ -246,19 +305,46 @@ function ensureTool(message: ChatMessageVm, toolId: string, callId: string, name
 
 export function applyChatEvent(messages: ChatMessageVm[], event: ChatEvent): void {
   switch (event.type) {
-    case 'message_start':
+    case 'message_start': {
+      if (event.msg.role === 'user') {
+        const syncedUser = syncOptimisticUserMessage(messages, event.msg)
+        if (syncedUser) {
+          return
+        }
+      }
+
+      const existing = messages.find(item => item.id === event.msg.id)
+      if (existing) {
+        existing.role = event.msg.role
+        if (typeof event.msg.createdAt === 'number' && Number.isFinite(event.msg.createdAt)) {
+          existing.createdAt = Math.max(existing.createdAt, event.msg.createdAt)
+        }
+        existing.parentId = event.msg.parentId ?? existing.parentId
+        existing.model = event.msg.model ?? existing.model
+        existing.agent = event.msg.agent ?? existing.agent
+        if (existing.role === 'assistant' && existing.status !== 'done' && existing.status !== 'error') {
+          existing.status = 'streaming'
+        }
+        messages.sort((left, right) => left.createdAt - right.createdAt)
+        return
+      }
+
       upsertMessage(messages, {
         id: event.msg.id,
         role: event.msg.role,
-        createdAt: event.msg.createdAt,
+        createdAt: event.msg.role === 'assistant'
+          ? resolveAssistantCreatedAt(messages, event.msg.createdAt, event.msg.parentId)
+          : event.msg.createdAt,
+        parentId: event.msg.parentId,
         text: '',
         reasoning: '',
         tools: [],
-        status: 'streaming',
+        status: event.msg.role === 'assistant' ? 'streaming' : 'done',
         model: event.msg.model,
         agent: event.msg.agent,
       })
       return
+    }
 
     case 'text_delta':
       ensureAssistant(messages, event.msgId).text += event.text
@@ -329,6 +415,7 @@ export function createErrorAssistantMessage(message: string): ChatMessageVm {
     id: `error-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: 'assistant',
     createdAt: Date.now(),
+    parentId: undefined,
     text: '',
     reasoning: '',
     tools: [],
@@ -359,12 +446,94 @@ export function mergeChatMessages(history: ChatMessageVm[], current: ChatMessage
       tools: message.tools.length >= existing.tools.length ? message.tools : existing.tools,
       usage: message.usage ?? existing.usage,
       error: message.error ?? existing.error,
+      parentId: message.parentId ?? existing.parentId,
       optimistic: message.optimistic || existing.optimistic,
       status: message.status === 'streaming' ? 'streaming' : existing.status === 'error' ? 'error' : message.status,
     })
   }
 
   return Array.from(merged.values()).sort((left, right) => left.createdAt - right.createdAt)
+}
+
+export interface ConversationTurn {
+  id: string
+  userMessage: ChatMessageVm | null
+  assistantMessages: ChatMessageVm[]
+  autoExpand: boolean
+}
+
+function isBlankUserPlaceholder(message: ChatMessageVm): boolean {
+  if (message.role !== 'user') {
+    return false
+  }
+
+  return !message.text.trim()
+    && !message.reasoning.trim()
+    && message.tools.length === 0
+    && !message.error
+}
+
+export function buildConversationTurns(messages: ChatMessageVm[]): ConversationTurn[] {
+  const turns: ConversationTurn[] = []
+  const turnsByUserId = new Map<string, ConversationTurn>()
+  let currentSequentialTurn: ConversationTurn | null = null
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      const previousTurn = turns[turns.length - 1]
+      if (
+        isBlankUserPlaceholder(message)
+        && previousTurn?.userMessage
+        && previousTurn.assistantMessages.length === 0
+      ) {
+        turnsByUserId.set(message.id, previousTurn)
+        currentSequentialTurn = previousTurn
+        continue
+      }
+
+      const turn: ConversationTurn = {
+        id: `turn-${message.id}`,
+        userMessage: message,
+        assistantMessages: [],
+        autoExpand: false,
+      }
+      turns.push(turn)
+      turnsByUserId.set(message.id, turn)
+      currentSequentialTurn = turn
+      continue
+    }
+
+    const parentId = message.parentId?.trim()
+    if (parentId) {
+      const linkedTurn = turnsByUserId.get(parentId)
+      if (linkedTurn) {
+        linkedTurn.assistantMessages.push(message)
+        continue
+      }
+    }
+
+    if (!currentSequentialTurn) {
+      currentSequentialTurn = {
+        id: `turn-orphan-${message.id}`,
+        userMessage: null,
+        assistantMessages: [message],
+        autoExpand: false,
+      }
+      turns.push(currentSequentialTurn)
+      continue
+    }
+
+    currentSequentialTurn.assistantMessages.push(message)
+  }
+
+  if (turns.length > 0) {
+    const lastTurn = turns[turns.length - 1]
+    if (lastTurn.assistantMessages.some(message => message.status === 'streaming')) {
+      lastTurn.autoExpand = true
+    }
+  }
+
+  return turns
 }
 
 // 支持的思考强度选项映射，用于标准化不同模型的参数名称
