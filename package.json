@@ -152,6 +152,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "package.json",
+        "to": "app/package.json"
       }
     ],
     "win": {

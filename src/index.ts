@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import pkg from '../package.json' with { type: 'json' };
+import { VERSION } from './utils/version.js';
 import { initLogger } from './utils/logger.js';
 import { logStore } from './store/log-store.js';
 import { createAdminServer } from './admin/admin-server.js';
@@ -513,7 +513,7 @@ async function main() {
   initLogger(logStore);
 
   console.log('╔════════════════════════════════════════════════╗');
-  console.log('║   飞书 × OpenCode 桥接服务 v' + pkg.version + '     ║');
+  console.log('║   飞书 × OpenCode 桥接服务 v' + VERSION + '     ║');
   console.log('╚════════════════════════════════════════════════╝');
 
   // 0. 动态加载已配置的平台适配器（避免全量加载 SDK）
@@ -621,7 +621,7 @@ async function main() {
       password: adminPassword,
       cronManager: undefined, // cronManager 在后面初始化
       startedAt: new Date(),
-      version: pkg.version,
+      version: VERSION,
     });
     adminServer.start();
     console.log(`[Admin] 管理面板已启动: http://localhost:${adminPort}`);
