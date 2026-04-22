@@ -165,13 +165,14 @@ export function useChatMessages(sessionId: Ref<string | null>) {
   async function sendText(payload: {
     sessionId: string
     text: string
+    parts?: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>
     providerId?: string
     modelId?: string
     agent?: string
     variant?: string
   }): Promise<void> {
     const trimmed = payload.text.trim()
-    if (!trimmed) return
+    if (!trimmed && !payload.parts) return
 
     const model: ChatModelRef | undefined = payload.providerId && payload.modelId
       ? {
@@ -180,7 +181,7 @@ export function useChatMessages(sessionId: Ref<string | null>) {
         }
       : undefined
 
-    messages.value = [...messages.value, createOptimisticUserMessage(trimmed, model)]
+    messages.value = [...messages.value, createOptimisticUserMessage(trimmed, model, payload.parts)]
     sending.value = true
     lastError.value = null
 
@@ -188,6 +189,7 @@ export function useChatMessages(sessionId: Ref<string | null>) {
       await chatApi.sendPrompt({
         sessionId: payload.sessionId,
         text: trimmed,
+        parts: payload.parts,
         providerId: payload.providerId,
         modelId: payload.modelId,
         agent: payload.agent,

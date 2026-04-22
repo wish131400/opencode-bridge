@@ -24,6 +24,22 @@
           :tools="message.tools"
         />
 
+        <!-- 文件/图片附件 -->
+        <div v-if="fileParts.length > 0" class="message-attachments">
+          <div v-for="(part, index) in fileParts" :key="index" class="attachment-item">
+            <img
+              v-if="part.mime?.startsWith('image/')"
+              :src="part.url"
+              :alt="part.filename || '图片'"
+              class="attachment-image"
+              @click="previewImage(part.url)"
+            />
+            <a v-else :href="part.url" :download="part.filename" class="attachment-file">
+              📎 {{ part.filename || '文件' }}
+            </a>
+          </div>
+        </div>
+
         <div v-if="message.text" class="message-main">
           <StreamingMessage
             v-if="message.role === 'assistant' && message.status === 'streaming'"
@@ -77,6 +93,24 @@ defineEmits<{
 const roleLabel = computed(() => props.message.role === 'user' ? '用户' : 'chat:opencode')
 const textSegments = computed(() => splitMarkdownSegments(props.message.text))
 
+// 提取文件/图片部分
+const fileParts = computed(() => {
+  if (!props.message.parts) return []
+
+  return props.message.parts
+    .filter(part => part.type === 'file')
+    .map(part => {
+      const filePart = part as Record<string, unknown>
+      return {
+        type: 'file' as const,
+        url: String(filePart.url || ''),
+        filename: filePart.filename ? String(filePart.filename) : undefined,
+        mime: filePart.mime ? String(filePart.mime) : undefined,
+      }
+    })
+    .filter(fp => fp.url.length > 0)
+})
+
 const copyText = computed(() => {
   const sections: string[] = []
   const text = compactText(props.message.text)
@@ -122,6 +156,10 @@ async function copyMessage(): Promise<void> {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '复制失败')
   }
+}
+
+function previewImage(url: string): void {
+  window.open(url, '_blank')
 }
 
 async function copyToClipboard(text: string): Promise<void> {
@@ -276,6 +314,53 @@ async function copyToClipboard(text: string): Promise<void> {
   font-size: 12px;
   color: #94a3b8;
   padding: 0 2px;
+}
+
+.message-attachments {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: center;
+}
+
+.attachment-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.attachment-image:hover {
+  transform: scale(1.02);
+}
+
+.attachment-file {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.message-bubble--user .attachment-file {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.attachment-file:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble--user .attachment-file:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 @media (max-width: 768px) {

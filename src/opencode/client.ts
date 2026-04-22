@@ -1,7 +1,11 @@
 import { createOpencodeClient, type OpencodeClient as SdkOpencodeClient } from '@opencode-ai/sdk';
 import type { Session, Message, Part, Project } from '@opencode-ai/sdk';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { opencodeConfig, modelConfig } from '../config.js';
 import { EventEmitter } from 'events';
+
+const LOCAL_UPLOAD_DIR = path.resolve(process.cwd(), 'data', 'uploads');
 
 // 权限请求事件类型
 export interface PermissionRequestEvent {
@@ -328,6 +332,53 @@ function appendAuthHint(message: string, statusCode?: number): string {
     return message;
   }
   return `${message}；${buildAuthEnvHint()}`;
+}
+
+function extractLocalUploadFilename(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let pathname = trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      pathname = new URL(trimmed).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!pathname.startsWith('/uploads/')) {
+    return null;
+  }
+
+  const filename = path.basename(pathname);
+  return filename && filename !== '.' && filename !== '..' ? filename : null;
+}
+
+async function inlineLocalUploadParts(
+  parts: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>
+): Promise<Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>> {
+  return Promise.all(parts.map(async part => {
+    if (part.type !== 'file') {
+      return part;
+    }
+
+    const filename = extractLocalUploadFilename(part.url);
+    if (!filename) {
+      return part;
+    }
+
+    const filePath = path.join(LOCAL_UPLOAD_DIR, filename);
+    const buffer = await fs.readFile(filePath);
+    const mime = part.mime || 'application/octet-stream';
+
+    return {
+      ...part,
+      url: `data:${mime};base64,${buffer.toString('base64')}`,
+    };
+  }));
 }
 
 class OpencodeClientWrapper extends EventEmitter {
@@ -824,6 +875,7 @@ class OpencodeClientWrapper extends EventEmitter {
   ): Promise<{ info: Message; parts: Part[] }> {
     const client = this.getClient();
     const model = this.resolveModelOption(options);
+    const resolvedParts = await inlineLocalUploadParts(parts);
 
     if (options?.directory) {
       void this.ensureDirectoryEventStream(options.directory);
@@ -832,7 +884,7 @@ class OpencodeClientWrapper extends EventEmitter {
       const response = await client.session.prompt({
         path: { id: sessionId },
         body: {
-          parts,
+          parts: resolvedParts,
           // ...(messageId ? { messageID: messageId } : {}), // 已注释：避免传递飞书 MessageID 导致 Opencode 无法处理
           ...(options?.agent ? { agent: options.agent } : {}),
           ...(model ? { model } : {}),
@@ -897,6 +949,7 @@ class OpencodeClientWrapper extends EventEmitter {
   ): Promise<void> {
     this.getClient();
     const model = this.resolveModelOption(options);
+    const resolvedParts = await inlineLocalUploadParts(parts);
 
     if (options?.directory) {
       void this.ensureDirectoryEventStream(options.directory);
@@ -907,7 +960,7 @@ class OpencodeClientWrapper extends EventEmitter {
       method: 'POST',
       headers: withOpencodeAuthorizationHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
-        parts,
+        parts: resolvedParts,
         ...(options?.agent ? { agent: options.agent } : {}),
         ...(model ? { model } : {}),
         ...(options?.variant ? { variant: options.variant } : {}),

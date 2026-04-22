@@ -13,6 +13,19 @@
         </header>
 
         <div class="turn-bubble turn-bubble--user">
+          <div v-if="userFileParts.length > 0" class="turn-attachments">
+            <div v-for="(part, index) in userFileParts" :key="index" class="turn-attachment">
+              <img
+                v-if="part.mime?.startsWith('image/')"
+                :src="part.url"
+                :alt="part.filename || '图片'"
+                class="turn-attachment__image"
+              />
+              <a v-else :href="part.url" :download="part.filename" class="turn-attachment__file">
+                📎 {{ part.filename || '文件' }}
+              </a>
+            </div>
+          </div>
           <template v-for="segment in userSegments" :key="segment.id">
             <Markdown v-if="segment.type === 'markdown'" :source="segment.content" />
             <CodeBlock v-else :code="segment.code" :language="segment.language" />
@@ -132,6 +145,21 @@ const isStreaming = computed(() => props.assistantMessages.some(msg => msg.statu
 const hasError = computed(() => props.assistantMessages.some(msg => msg.status === 'error'))
 
 const userSegments = computed(() => splitMarkdownSegments(props.userMessage.text))
+const userFileParts = computed(() => {
+  if (!props.userMessage.parts) return []
+
+  return props.userMessage.parts
+    .filter(part => part.type === 'file')
+    .map(part => {
+      const filePart = part as Record<string, unknown>
+      return {
+        url: typeof filePart.url === 'string' ? filePart.url : '',
+        filename: typeof filePart.filename === 'string' ? filePart.filename : undefined,
+        mime: typeof filePart.mime === 'string' ? filePart.mime : undefined,
+      }
+    })
+    .filter(part => part.url)
+})
 
 const assistantReasoning = computed(() =>
   props.assistantMessages
@@ -365,6 +393,39 @@ async function copyTurn(): Promise<void> {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   color: #16304d;
+}
+
+.turn-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.turn-attachment {
+  display: inline-flex;
+}
+
+.turn-attachment__image {
+  width: 160px;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.turn-attachment__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: inherit;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .assistant-main {

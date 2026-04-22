@@ -57,6 +57,8 @@
         :variants="currentEffortOptions"
         :agent-name="activePreference.agentName"
         :agents="primaryAgents"
+        :draft-attachments="composerDraftAttachments"
+        :draft-attachments-key="composerDraftAttachmentsKey"
         :model-label="selectedModelLabel"
         :effort-label="selectedEffortLabel"
         :agent-label="selectedAgentLabel"
@@ -251,6 +253,8 @@ const {
 } = useChatMessages(activeSessionId)
 
 const sidebarWidth = ref(300)
+const composerDraftAttachments = ref<Array<{ url: string; mime: string; filename?: string }>>([])
+const composerDraftAttachmentsKey = ref(0)
 const panelWidths = ref<Record<PanelKey, number>>({
   git: 360,
   files: 360,
@@ -882,6 +886,7 @@ async function handleDeleteSession(sessionId: string): Promise<void> {
 
 async function handleSubmit(payload: {
   text: string
+  parts?: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>
   providerId?: string
   modelId?: string
   variant?: string
@@ -900,9 +905,12 @@ async function handleSubmit(payload: {
 
   const sessionId = await ensureSession()
   touchSession(sessionId)
+  composerDraftAttachments.value = []
+  composerDraftAttachmentsKey.value += 1
   await sendText({
     sessionId,
     text: payload.text,
+    parts: payload.parts,
     providerId: payload.providerId,
     modelId: payload.modelId,
     variant: payload.variant,
@@ -990,6 +998,8 @@ async function handleUndoCommand(): Promise<void> {
         await chatApi.revertSession(activeSessionId.value, refreshedTarget.revertMessageId)
         await reloadMessages()
         composerDraft.value = draftText
+        composerDraftAttachments.value = refreshedTarget.draftAttachments
+        composerDraftAttachmentsKey.value += 1
         ElMessage.success('已回退上一轮')
       } catch (error) {
         await reloadMessages()
@@ -999,6 +1009,8 @@ async function handleUndoCommand(): Promise<void> {
       // 后端也没有这条消息，仅做本地清理
       discardFromMessage(target.trimMessageId)
       composerDraft.value = target.draftText
+      composerDraftAttachments.value = target.draftAttachments
+      composerDraftAttachmentsKey.value += 1
       ElMessage.success('已回退上一轮')
     }
     return
@@ -1011,6 +1023,8 @@ async function handleUndoCommand(): Promise<void> {
     await chatApi.revertSession(activeSessionId.value, target.revertMessageId)
     await reloadMessages()
     composerDraft.value = target.draftText
+    composerDraftAttachments.value = target.draftAttachments
+    composerDraftAttachmentsKey.value += 1
     ElMessage.success('已回退上一轮')
   } catch (error) {
     await reloadMessages()
@@ -1027,6 +1041,7 @@ function buildRevertTarget(message: ChatMessageVm): {
   revertMessageId?: string
   trimMessageId: string
   draftText: string
+  draftAttachments: Array<{ url: string; mime: string; filename?: string }>
 } | null {
   const clickedIndex = messages.value.findIndex(item => item.id === message.id)
   if (clickedIndex < 0) {
@@ -1052,7 +1067,22 @@ function buildRevertTarget(message: ChatMessageVm): {
     revertMessageId: backendMessageId,
     trimMessageId: targetMessage.id,
     draftText: targetMessage.role === 'user' ? targetMessage.text : '',
+    draftAttachments: extractDraftAttachments(targetMessage),
   }
+}
+
+function extractDraftAttachments(message: ChatMessageVm): Array<{ url: string; mime: string; filename?: string }> {
+  return (message.parts || [])
+    .filter(part => part.type === 'file')
+    .map(part => {
+      const filePart = part as Record<string, unknown>
+      return {
+        url: typeof filePart.url === 'string' ? filePart.url : '',
+        mime: typeof filePart.mime === 'string' ? filePart.mime : 'application/octet-stream',
+        filename: typeof filePart.filename === 'string' ? filePart.filename : undefined,
+      }
+    })
+    .filter(part => part.url)
 }
 
 async function handleRevert(message: ChatMessageVm): Promise<void> {
@@ -1082,6 +1112,8 @@ async function handleRevert(message: ChatMessageVm): Promise<void> {
         await chatApi.revertSession(activeSessionId.value, refreshedTarget.revertMessageId)
         await reloadMessages()
         composerDraft.value = refreshedTarget.draftText
+        composerDraftAttachments.value = refreshedTarget.draftAttachments
+        composerDraftAttachmentsKey.value += 1
         ElMessage.success('已回退到所选消息')
       } catch (error) {
         await reloadMessages()
@@ -1091,6 +1123,8 @@ async function handleRevert(message: ChatMessageVm): Promise<void> {
       // 后端也没有，仅做本地清理
       discardFromMessage(target.trimMessageId)
       composerDraft.value = target.draftText
+      composerDraftAttachments.value = target.draftAttachments
+      composerDraftAttachmentsKey.value += 1
       ElMessage.success('已回退到所选消息')
     }
     return
@@ -1102,6 +1136,8 @@ async function handleRevert(message: ChatMessageVm): Promise<void> {
     await chatApi.revertSession(activeSessionId.value, target.revertMessageId)
     await reloadMessages()
     composerDraft.value = target.draftText
+    composerDraftAttachments.value = target.draftAttachments
+    composerDraftAttachmentsKey.value += 1
     ElMessage.success('已回退到所选消息')
   } catch (error) {
     await reloadMessages()

@@ -165,11 +165,15 @@ export function registerChatUploadRoutes(app: Application): void {
       const file = req.file;
       const mime = getMimeType(file.originalname);
 
+      // 返回相对路径，避免代理问题
+      // 浏览器会自动从当前域名加载，不经过代理
+      const fileUrl = `/uploads/${file.filename}`;
+
       // 返回文件信息
       res.json({
         ok: true,
         file: {
-          url: `/uploads/${file.filename}`,
+          url: fileUrl,
           filename: file.originalname,
           mime,
           size: file.size,

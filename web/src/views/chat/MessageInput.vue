@@ -72,17 +72,21 @@
           :key="attachment.id"
           :class="['attachment-item', { 'attachment-item--uploading': attachment.uploading, 'attachment-item--error': attachment.error }]"
         >
-          <div class="attachment-item__icon">
+          <div v-if="attachment.previewUrl && attachment.mime.startsWith('image/')" class="attachment-item__thumb-wrap">
+            <img :src="attachment.previewUrl" :alt="attachment.filename" class="attachment-item__thumb" />
+          </div>
+          <div v-else class="attachment-item__icon">
             <span v-if="attachment.uploading" class="uploading-spinner">⏳</span>
             <span v-else-if="attachment.error">❌</span>
-            <span v-else>{{ getFileIcon(attachment.file.type || 'application/octet-stream') }}</span>
+            <span v-else>{{ getFileIcon(attachment.mime) }}</span>
           </div>
           <div class="attachment-item__info">
-            <div class="attachment-item__name">{{ attachment.file.name }}</div>
+            <div class="attachment-item__name">{{ attachment.filename }}</div>
             <div class="attachment-item__meta">
               <span v-if="attachment.uploading">上传中...</span>
               <span v-else-if="attachment.error">{{ attachment.error }}</span>
-              <span v-else>{{ formatFileSize(attachment.file.size) }}</span>
+              <span v-else-if="attachment.size != null">{{ formatFileSize(attachment.size) }}</span>
+              <span v-else>已恢复附件</span>
             </div>
           </div>
           <button
@@ -197,10 +201,20 @@ interface ModelOption {
 
 interface Attachment {
   id: string
-  file: File
+  file?: File
   url?: string
+  previewUrl?: string
+  mime: string
+  filename: string
+  size?: number
   uploading: boolean
   error?: string
+}
+
+interface DraftAttachment {
+  url: string
+  mime: string
+  filename?: string
 }
 
 const props = defineProps<{
@@ -216,6 +230,8 @@ const props = defineProps<{
   sending: boolean
   canAbort: boolean
   aborting: boolean
+  draftAttachments?: DraftAttachment[]
+  draftAttachmentsKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -287,6 +303,10 @@ const addFiles = async (files: File[]) => {
     const attachment: Attachment = {
       id,
       file,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      mime: file.type || 'application/octet-stream',
+      filename: file.name,
+      size: file.size,
       uploading: true,
     }
     attachments.value.push(attachment)
@@ -298,15 +318,18 @@ const addFiles = async (files: File[]) => {
 
 // 上传单个文件
 const uploadFile = async (attachment: Attachment) => {
+  if (!attachment.file) return
+
   uploadingCount.value++
   try {
     const result = await chatApi.uploadFile(attachment.file)
+    // 保持相对路径，避免把内网地址暴露给上游下载链路
     attachment.url = result.file.url
     attachment.uploading = false
   } catch (error) {
     attachment.uploading = false
     attachment.error = error instanceof Error ? error.message : '上传失败'
-    ElMessage.error(`上传失败: ${attachment.file.name}`)
+    ElMessage.error(`上传失败: ${attachment.filename}`)
   } finally {
     uploadingCount.value--
   }
@@ -354,11 +377,6 @@ const handleDragOver = (event: DragEvent) => {
   event.preventDefault()
 }
 
-// 获取 MIME 类型
-const getMimeType = (file: File): string => {
-  return file.type || 'application/octet-stream'
-}
-
 // 获取所有 parts（文本 + 附件）
 const getAllParts = computed(() => {
   const parts: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }> = []
@@ -368,9 +386,9 @@ const getAllParts = computed(() => {
     if (attachment.url && !attachment.uploading && !attachment.error) {
       parts.push({
         type: 'file',
-        mime: getMimeType(attachment.file),
+        mime: attachment.mime,
         url: attachment.url,
-        filename: attachment.file.name,
+        filename: attachment.filename,
       })
     }
   }
@@ -584,6 +602,26 @@ function submit(): void {
   attachments.value = []
 }
 
+watch(
+  () => props.draftAttachmentsKey,
+  () => {
+    if (!Array.isArray(props.draftAttachments)) {
+      attachments.value = []
+      return
+    }
+
+    attachments.value = props.draftAttachments.map((attachment, index) => ({
+      id: `restored-${props.draftAttachmentsKey ?? 0}-${index}`,
+      url: attachment.url,
+      previewUrl: attachment.mime.startsWith('image/') ? attachment.url : undefined,
+      mime: attachment.mime || 'application/octet-stream',
+      filename: attachment.filename || '附件',
+      uploading: false,
+    }))
+  },
+  { immediate: true }
+)
+
 function handleKeydown(event: KeyboardEvent): void {
   if (showSlashPalette.value && filteredCommands.value.length > 0) {
     if (event.key === 'ArrowDown') {
@@ -692,6 +730,22 @@ function handleKeydown(event: KeyboardEvent): void {
   font-size: 24px;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.attachment-item__thumb-wrap {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.attachment-item__thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .uploading-spinner {

@@ -19,6 +19,8 @@
  */
 
 import express, { type Request, type Response, type Application } from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { opencodeClient } from '../../opencode/client.js';
 import { chatAuthMiddleware } from './chat-auth.js';
 
@@ -31,6 +33,8 @@ interface PromptRequestBody {
   variant?: string;
   directory?: string;
 }
+
+const UPLOAD_DIR = path.resolve(process.cwd(), 'data', 'uploads');
 
 function errorMsg(e: unknown): string {
   return e instanceof Error ? e.message : 'Unknown error';
@@ -52,6 +56,55 @@ function validateParts(parts: unknown): parts is PromptRequestBody['parts'] {
   return true;
 }
 
+function extractUploadFilename(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let pathname = trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      pathname = new URL(trimmed).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!pathname.startsWith('/uploads/')) {
+    return null;
+  }
+
+  const filename = path.basename(pathname);
+  return filename && filename !== '.' && filename !== '..' ? filename : null;
+}
+
+async function inlineUploadParts(
+  parts: NonNullable<PromptRequestBody['parts']>
+): Promise<NonNullable<PromptRequestBody['parts']>> {
+  const resolved = await Promise.all(parts.map(async part => {
+    if (part.type !== 'file') {
+      return part;
+    }
+
+    const filename = extractUploadFilename(part.url);
+    if (!filename) {
+      return part;
+    }
+
+    const filePath = path.join(UPLOAD_DIR, filename);
+    const buffer = await fs.readFile(filePath);
+    const mime = part.mime || 'application/octet-stream';
+
+    return {
+      ...part,
+      url: `data:${mime};base64,${buffer.toString('base64')}`,
+    };
+  }));
+
+  return resolved;
+}
+
 export function registerChatPromptRoutes(app: Application): void {
   const router = express.Router();
   router.use(chatAuthMiddleware);
@@ -69,7 +122,9 @@ export function registerChatPromptRoutes(app: Application): void {
         return;
       }
 
-      await opencodeClient.sendMessagePartsAsync(sessionId, body.parts!, {
+      const resolvedParts = await inlineUploadParts(body.parts!);
+
+      await opencodeClient.sendMessagePartsAsync(sessionId, resolvedParts, {
         providerId: body.providerId,
         modelId: body.modelId,
         agent: body.agent,

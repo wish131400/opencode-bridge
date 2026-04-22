@@ -57,6 +57,8 @@
       :variants="variants"
       :agent-name="agentName"
       :agents="agents"
+      :draft-attachments="draftAttachments"
+      :draft-attachments-key="draftAttachmentsKey"
       :disabled="false"
       :sending="sending"
       :can-abort="sending || streamState === 'connected'"
@@ -108,6 +110,8 @@ defineProps<{
   variants: string[]
   agentName?: string
   agents: ChatAgentInfo[]
+  draftAttachments?: Array<{ url: string; mime: string; filename?: string }>
+  draftAttachmentsKey?: number
   modelLabel: string
   effortLabel: string
   agentLabel: string
@@ -116,7 +120,7 @@ defineProps<{
 }>()
 
 defineEmits<{
-  submit: [{ text: string; providerId?: string; modelId?: string; variant?: string; agent?: string }]
+  submit: [{ text: string; parts?: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>; providerId?: string; modelId?: string; variant?: string; agent?: string }]
   abort: []
   reconnect: []
   loadMore: []

@@ -38,6 +38,7 @@ export interface ChatMessageVm {
   model?: ChatModelRef
   agent?: string
   optimistic?: boolean
+  parts?: ChatMessagePart[]
 }
 
 function isTodoWriteTool(name: string): boolean {
@@ -181,6 +182,7 @@ export function normalizeHistoryMessage(message: ChatHistoryMessage): ChatMessag
     error,
     model: toModelRef(message.info),
     agent: message.info.role === 'assistant' ? message.info.mode : message.info.agent,
+    parts: message.parts,
   }
 }
 
@@ -396,7 +398,11 @@ export function applyChatEvent(messages: ChatMessageVm[], event: ChatEvent): voi
   }
 }
 
-export function createOptimisticUserMessage(text: string, model?: ChatModelRef): ChatMessageVm {
+export function createOptimisticUserMessage(
+  text: string,
+  model?: ChatModelRef,
+  parts?: Array<{ type: 'text'; text: string } | { type: 'file'; mime: string; url: string; filename?: string }>
+): ChatMessageVm {
   return {
     id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: 'user',
@@ -407,6 +413,7 @@ export function createOptimisticUserMessage(text: string, model?: ChatModelRef):
     status: 'done',
     model,
     optimistic: true,
+    parts: parts as ChatMessagePart[],
   }
 }
 

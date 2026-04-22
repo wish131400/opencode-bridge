@@ -98,7 +98,7 @@
         <el-table-column label="Session ID" min-width="180" resizable>
           <template #default="{ row }">
             <div class="session-id" :title="row.id">
-              {{ row.id.slice(0, 12) }}...
+              {{ row.id }}
             </div>
           </template>
         </el-table-column>
@@ -129,7 +129,7 @@
             <div v-if="row.bindings.length > 0" class="bindings-list">
               <div v-for="(b, idx) in row.bindings" :key="idx" class="binding-item">
                 <el-tag size="small" effect="plain" class="platform-tag">{{ getPlatformName(b.platform) }}</el-tag>
-                <span class="conv-id" :title="b.conversationId">{{ b.conversationId.slice(0, 16) }}...</span>
+                <span class="conv-id" :title="b.conversationId">{{ b.conversationId }}</span>
                 <el-tag v-if="b.chatType" :type="b.chatType === 'p2p' ? 'success' : 'info'" size="small" class="chat-type">
                   {{ b.chatType === 'p2p' ? '私聊' : '群聊' }}
                 </el-tag>
@@ -182,12 +182,12 @@
             <el-option
               v-for="s in openCodeSessions"
               :key="s.id"
-              :label="s.title ? `${s.title} (${s.id.slice(0, 8)}...)` : s.id"
+              :label="s.title ? `${s.title} (${s.id})` : s.id"
               :value="s.id"
             >
               <div class="session-option">
                 <span>{{ s.title || '未命名会话' }}</span>
-                <span class="session-option-id">{{ s.id.slice(0, 8) }}...</span>
+                <span class="session-option-id">{{ s.id }}</span>
                 <el-tag v-if="s.isBound" type="success" size="small" class="bound-tag">已绑定</el-tag>
               </div>
             </el-option>
